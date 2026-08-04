@@ -1,3 +1,22 @@
 spring:
-  application:
-    name: analytics-service
+    application:
+        name: url-service
+    datasource:
+        url: jdbc:postgresql://localhost:5434/tinyurl_analytics
+        username: postgres
+        password: postgres
+    jpa:
+        hibernate:
+            ddl-auto: validate
+        show-sql: true
+    flyway:
+        enabled: true
+
+server:
+    port: 8083
+
+management:
+    endpoints:
+        web:
+            exposure:
+                include: health,info

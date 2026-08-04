@@ -1,2 +1,56 @@
 services:
-  
+  postgres-urls:
+    image: postgres:17-alpine
+    container_name: tinyurl-postgres-urls
+    environment:
+      POSTGRES_DB: tinyurl_urls
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_urls_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-auth:
+    image: postgres:17-alpine
+    container_name: tinyurl-postgres-auth
+    environment:
+      POSTGRES_DB: tinyurl_auth
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_auth_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-analytics:
+    image: postgres:17-alpine
+    container_name: tinyurl-postgres-analytics
+    environment:
+      POSTGRES_DB: tinyurl_analytics
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_analytics_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_urls_data:
+  postgres_auth_data:
+  postgres_analytics_data:
