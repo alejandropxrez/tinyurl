@@ -2,44 +2,100 @@
 
 These manifests target Docker Desktop Kubernetes for local learning.
 
-## Apply infrastructure and url-service
+## What runs in Kubernetes
 
-```powershell
-kubectl apply -f k8s/namespace.yaml `
-  -f k8s/redis.yaml `
-  -f k8s/postgres-urls.yaml `
-  -f k8s/rabbitmq.yaml `
-  -f k8s/url-service.yaml
+The `tinyurl` namespace contains:
+
+- `url-service`
+- `auth-service`
+- `analytics-service`
+- `postgres-urls`
+- `postgres-auth`
+- `postgres-analytics`
+- `rabbitmq`
+- `redis`
+
+Each service gets a stable Kubernetes `Service` DNS name. For example,
+`url-service` connects to Postgres with:
+
+```text
+jdbc:postgresql://postgres-urls:5432/tinyurl_urls
 ```
+
+Kubernetes DNS resolves `postgres-urls` to the matching database Service inside
+the `tinyurl` namespace.
 
 ## Local app images
 
-Docker Desktop Kubernetes uses containerd inside the Kubernetes node. It does not
-automatically see images from the regular Docker Engine image list.
+Docker Desktop Kubernetes uses `containerd` inside the Kubernetes node. It does
+not automatically see images from the regular Docker Engine image list.
 
-For `url-service`, build the image with Docker Compose or Docker first, then load
-it into the Kubernetes node:
+The application Deployments use `imagePullPolicy: Never`, so the images must
+already exist in the Kubernetes node image store.
+
+First build the service images:
 
 ```powershell
-docker save localhost:5000/distributed-tinyurl-url-service:latest -o C:\tmp\distributed-tinyurl-url-service.tar
-docker cp C:\tmp\distributed-tinyurl-url-service.tar desktop-control-plane:/distributed-tinyurl-url-service.tar
-docker exec desktop-control-plane bash -lc "ctr -n k8s.io images import /distributed-tinyurl-url-service.tar"
+docker compose build url-service auth-service analytics-service
 ```
 
-The `url-service` Deployment uses `imagePullPolicy: Never`, so Kubernetes expects
-the image to already exist in the node's containerd image store.
+Then import them into Docker Desktop Kubernetes:
 
-## Access url-service from the host
+```powershell
+.\k8s\import-images.ps1
+```
 
-The Kubernetes `url-service` Service is internal to the cluster. For local
-testing, open a temporary port-forward:
+The script tags each image as `localhost:5000/...`, saves it, copies it into the
+`desktop-control-plane` node, and imports it with `ctr -n k8s.io images import`.
+
+## Apply the full stack
+
+```powershell
+.\k8s\apply-all.ps1
+```
+
+The script applies manifests in dependency order and waits for every Deployment
+to roll out.
+
+To inspect the cluster manually:
+
+```powershell
+kubectl get deployments,svc,pvc -n tinyurl
+kubectl get pods -n tinyurl -o wide
+```
+
+## Access services from the host
+
+The application Services are internal `ClusterIP` Services. For local testing,
+open temporary port-forwards:
 
 ```powershell
 kubectl port-forward -n tinyurl svc/url-service 30081:8081
+kubectl port-forward -n tinyurl svc/auth-service 30082:8082
+kubectl port-forward -n tinyurl svc/analytics-service 30083:8083
 ```
 
-Then call:
+Then call health endpoints:
 
 ```powershell
 Invoke-RestMethod http://localhost:30081/actuator/health
+Invoke-RestMethod http://localhost:30082/actuator/health
+Invoke-RestMethod http://localhost:30083/actuator/health
 ```
+
+## Full smoke test
+
+With `url-service` forwarded to `30081` and `analytics-service` forwarded to
+`30083`:
+
+```powershell
+$body = @{ originalUrl = "https://www.google.com" } | ConvertTo-Json
+$created = Invoke-RestMethod -Method Post -Uri "http://localhost:30081/api/v1/urls" -ContentType "application/json" -Body $body
+$code = $created.shortCode
+Invoke-WebRequest -Uri "http://localhost:30081/$code" -MaximumRedirection 0
+Start-Sleep -Seconds 2
+Invoke-RestMethod -Uri "http://localhost:30083/api/v1/analytics/urls/$code/clicks"
+```
+
+Expected result: the redirect returns `302`, and analytics returns a click count
+of `1` or higher.
