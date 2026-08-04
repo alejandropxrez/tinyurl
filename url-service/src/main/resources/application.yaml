@@ -21,5 +21,12 @@ management:
       exposure:
         include: health,info
 app:
+  base-url: ${APP_BASE_URL:http://localhost:8081}
+  api:
+    base-path: ${API_BASE_PATH:/api/v1}
   snowflake:
     node-id: ${SNOWFLAKE_NODE_ID:1}
+  events:
+    clicks:
+      exchange: ${CLICK_EVENTS_EXCHANGE:tinyurl.clicks}
+      routing-key: ${CLICK_EVENTS_ROUTING_KEY:click.recorded}
