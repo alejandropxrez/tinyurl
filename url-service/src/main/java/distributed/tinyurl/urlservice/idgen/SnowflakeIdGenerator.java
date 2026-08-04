@@ -37,7 +37,7 @@ public class SnowflakeIdGenerator {
     private long lastTimestamp = -1L;
     private long sequence = 0L;
 
-    public SnowflakeIdGenerator(@Value("${app.snowflake.node-id:1}") long nodeId, Clock clock) {
+    public SnowflakeIdGenerator(@Value("${app.snowflake.node-id}") long nodeId, Clock clock) {
         if (nodeId < 0 || nodeId > MAX_NODE_ID) {
             throw new IllegalArgumentException(
                     "node-id must be between 0 and " + MAX_NODE_ID + ", received: " + nodeId);
