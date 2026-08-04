@@ -27,6 +27,8 @@ management:
                 include: health,info
 
 app:
+    api:
+        base-path: ${API_BASE_PATH:/api/v1}
     events:
         clicks:
             exchange: ${CLICK_EVENTS_EXCHANGE:tinyurl.clicks}
