@@ -3,6 +3,8 @@ package distributed.tinyurl.urlservice.service;
 import distributed.tinyurl.urlservice.dto.CreateUrlRequest;
 import distributed.tinyurl.urlservice.dto.CreateUrlResponse;
 import distributed.tinyurl.urlservice.dto.UrlStatsResponse;
+import distributed.tinyurl.urlservice.events.ClickEventPublisher;
+import distributed.tinyurl.urlservice.events.ClickRecordedEvent;
 import distributed.tinyurl.urlservice.exception.UrlExpiredException;
 import distributed.tinyurl.urlservice.exception.UrlNotFoundException;
 import distributed.tinyurl.urlservice.idgen.ShortCodeGenerator;
@@ -22,6 +24,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -37,12 +40,15 @@ class UrlShortenerServiceTest {
     @Mock
     private ShortCodeGenerator shortCodeGenerator;
 
+    @Mock
+    private ClickEventPublisher clickEventPublisher;
+
     private UrlShortenerService service;
 
     @BeforeEach
     void setUp() {
         Clock fixedClock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
-        service = new UrlShortenerService(urlRepository, shortCodeGenerator, fixedClock, BASE_URL);
+        service = new UrlShortenerService(urlRepository, shortCodeGenerator, clickEventPublisher, fixedClock, BASE_URL);
     }
 
     @Test
@@ -79,6 +85,7 @@ class UrlShortenerServiceTest {
         String resolved = service.resolve("abc123X");
 
         assertThat(resolved).isEqualTo("https://www.anthropic.com");
+        verify(clickEventPublisher).publish(new ClickRecordedEvent("abc123X", FIXED_NOW));
     }
 
     @Test
@@ -94,6 +101,7 @@ class UrlShortenerServiceTest {
         String resolved = service.resolve("abc123X");
 
         assertThat(resolved).isEqualTo("https://www.anthropic.com");
+        verify(clickEventPublisher).publish(new ClickRecordedEvent("abc123X", FIXED_NOW));
     }
 
     @Test
@@ -109,6 +117,7 @@ class UrlShortenerServiceTest {
         assertThatThrownBy(() -> service.resolve("abc123X"))
                 .isInstanceOf(UrlExpiredException.class)
                 .hasMessageContaining("abc123X");
+        verify(clickEventPublisher, never()).publish(any(ClickRecordedEvent.class));
     }
 
     @Test
@@ -118,6 +127,7 @@ class UrlShortenerServiceTest {
         assertThatThrownBy(() -> service.resolve("noexiste"))
                 .isInstanceOf(UrlNotFoundException.class)
                 .hasMessageContaining("noexiste");
+        verify(clickEventPublisher, never()).publish(any(ClickRecordedEvent.class));
     }
 
     @Test

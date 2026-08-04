@@ -3,6 +3,8 @@ package distributed.tinyurl.urlservice.service;
 import distributed.tinyurl.urlservice.dto.CreateUrlRequest;
 import distributed.tinyurl.urlservice.dto.CreateUrlResponse;
 import distributed.tinyurl.urlservice.dto.UrlStatsResponse;
+import distributed.tinyurl.urlservice.events.ClickEventPublisher;
+import distributed.tinyurl.urlservice.events.ClickRecordedEvent;
 import distributed.tinyurl.urlservice.exception.UrlExpiredException;
 import distributed.tinyurl.urlservice.exception.UrlNotFoundException;
 import distributed.tinyurl.urlservice.idgen.ShortCodeGenerator;
@@ -19,17 +21,20 @@ public class UrlShortenerService {
 
     private final UrlRepository urlRepository;
     private final ShortCodeGenerator shortCodeGenerator;
+    private final ClickEventPublisher clickEventPublisher;
     private final Clock clock;
     private final String baseUrl;
 
     public UrlShortenerService(
             UrlRepository urlRepository,
             ShortCodeGenerator shortCodeGenerator,
+            ClickEventPublisher clickEventPublisher,
             Clock clock,
             @Value("${app.base-url}") String baseUrl
     ) {
         this.urlRepository = urlRepository;
         this.shortCodeGenerator = shortCodeGenerator;
+        this.clickEventPublisher = clickEventPublisher;
         this.clock = clock;
         this.baseUrl = baseUrl;
     }
@@ -61,6 +66,8 @@ public class UrlShortenerService {
         if (url.getExpiresAt() != null && url.getExpiresAt().isBefore(Instant.now(clock))) {
             throw new UrlExpiredException(shortCode);
         }
+
+        clickEventPublisher.publish(new ClickRecordedEvent(shortCode, Instant.now(clock)));
 
         return url.getOriginalUrl();
     }
