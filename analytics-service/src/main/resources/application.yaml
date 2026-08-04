@@ -25,3 +25,10 @@ management:
         web:
             exposure:
                 include: health,info
+
+app:
+    events:
+        clicks:
+            exchange: ${CLICK_EVENTS_EXCHANGE:tinyurl.clicks}
+            queue: ${CLICK_EVENTS_QUEUE:analytics.click-events}
+            routing-key: ${CLICK_EVENTS_ROUTING_KEY:click.recorded}
