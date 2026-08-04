@@ -42,3 +42,7 @@ app:
   cache:
     redirects:
       ttl: ${REDIRECT_CACHE_TTL:10m}
+  rate-limits:
+    create-url:
+      limit: ${CREATE_URL_RATE_LIMIT:60}
+      window: ${CREATE_URL_RATE_LIMIT_WINDOW:1m}
