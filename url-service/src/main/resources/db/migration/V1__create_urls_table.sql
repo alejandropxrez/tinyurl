@@ -1,6 +1,6 @@
 CREATE TABLE urls (
-                      id            BIGSERIAL PRIMARY KEY,
-                      short_code    VARCHAR(10) UNIQUE NOT NULL,
+                      id            BIGINT PRIMARY KEY,
+                      short_code    VARCHAR(11) UNIQUE NOT NULL,
                       original_url  TEXT NOT NULL,
                       user_id       BIGINT,
                       created_at    TIMESTAMP NOT NULL DEFAULT now(),
@@ -8,4 +8,4 @@ CREATE TABLE urls (
                       click_count   BIGINT NOT NULL DEFAULT 0
 );
 
-CREATE INDEX idx_urls_short_code ON urls(short_code);
+CREATE INDEX idx_urls_short_code ON urls(short_code););
