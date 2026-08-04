@@ -3,6 +3,8 @@ package distributed.tinyurl.urlservice.service;
 import distributed.tinyurl.urlservice.dto.CreateUrlRequest;
 import distributed.tinyurl.urlservice.dto.CreateUrlResponse;
 import distributed.tinyurl.urlservice.dto.UrlStatsResponse;
+import distributed.tinyurl.urlservice.cache.CachedRedirect;
+import distributed.tinyurl.urlservice.cache.UrlRedirectCache;
 import distributed.tinyurl.urlservice.events.ClickEventPublisher;
 import distributed.tinyurl.urlservice.events.ClickRecordedEvent;
 import distributed.tinyurl.urlservice.exception.UrlExpiredException;
@@ -21,6 +23,7 @@ public class UrlShortenerService {
 
     private final UrlRepository urlRepository;
     private final ShortCodeGenerator shortCodeGenerator;
+    private final UrlRedirectCache urlRedirectCache;
     private final ClickEventPublisher clickEventPublisher;
     private final Clock clock;
     private final String baseUrl;
@@ -28,12 +31,14 @@ public class UrlShortenerService {
     public UrlShortenerService(
             UrlRepository urlRepository,
             ShortCodeGenerator shortCodeGenerator,
+            UrlRedirectCache urlRedirectCache,
             ClickEventPublisher clickEventPublisher,
             Clock clock,
             @Value("${app.base-url}") String baseUrl
     ) {
         this.urlRepository = urlRepository;
         this.shortCodeGenerator = shortCodeGenerator;
+        this.urlRedirectCache = urlRedirectCache;
         this.clickEventPublisher = clickEventPublisher;
         this.clock = clock;
         this.baseUrl = baseUrl;
@@ -61,15 +66,35 @@ public class UrlShortenerService {
     }
 
     public String resolve(String shortCode) {
+        return urlRedirectCache.findByShortCode(shortCode)
+                .map(cachedRedirect -> resolveFromCache(shortCode, cachedRedirect))
+                .orElseGet(() -> resolveFromDatabase(shortCode));
+    }
+
+    private String resolveFromCache(String shortCode, CachedRedirect cachedRedirect) {
+        if (cachedRedirect.expiresAt() != null && cachedRedirect.expiresAt().isBefore(Instant.now(clock))) {
+            throw new UrlExpiredException(shortCode);
+        }
+
+        publishClick(shortCode);
+        return cachedRedirect.originalUrl();
+    }
+
+    private String resolveFromDatabase(String shortCode) {
         Url url = findByShortCodeOrThrow(shortCode);
 
         if (url.getExpiresAt() != null && url.getExpiresAt().isBefore(Instant.now(clock))) {
             throw new UrlExpiredException(shortCode);
         }
 
-        clickEventPublisher.publish(new ClickRecordedEvent(shortCode, Instant.now(clock)));
+        urlRedirectCache.save(shortCode, new CachedRedirect(url.getOriginalUrl(), url.getExpiresAt()));
+        publishClick(shortCode);
 
         return url.getOriginalUrl();
+    }
+
+    private void publishClick(String shortCode) {
+        clickEventPublisher.publish(new ClickRecordedEvent(shortCode, Instant.now(clock)));
     }
 
     public UrlStatsResponse getStats(String shortCode) {

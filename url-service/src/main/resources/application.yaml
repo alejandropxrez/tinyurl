@@ -16,6 +16,10 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 server:
   port: 8081
@@ -35,3 +39,6 @@ app:
     clicks:
       exchange: ${CLICK_EVENTS_EXCHANGE:tinyurl.clicks}
       routing-key: ${CLICK_EVENTS_ROUTING_KEY:click.recorded}
+  cache:
+    redirects:
+      ttl: ${REDIRECT_CACHE_TTL:10m}
