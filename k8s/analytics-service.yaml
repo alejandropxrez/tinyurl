@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: analytics-service-config
+  namespace: tinyurl
+data:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-analytics:5432/tinyurl_analytics
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_PORT: "5672"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+  namespace: tinyurl
+  labels:
+    app: analytics-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analytics-service
+  template:
+    metadata:
+      labels:
+        app: analytics-service
+    spec:
+      containers:
+        - name: analytics-service
+          image: localhost:5000/distributed-tinyurl-analytics-service:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8083
+          envFrom:
+            - configMapRef:
+                name: analytics-service-config
+          env:
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-analytics-secret
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-analytics-secret
+                  key: password
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8083
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8083
+            initialDelaySeconds: 40
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+  namespace: tinyurl
+spec:
+  selector:
+    app: analytics-service
+  ports:
+    - name: http
+      port: 8083
+      targetPort: 8083
