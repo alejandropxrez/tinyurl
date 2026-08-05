@@ -17,6 +17,15 @@ Docker Compose runs:
 - Redis
 - the 3 Spring Boot services
 
+Generate local JWT keys before starting the services:
+
+```powershell
+.\scripts\generate-jwt-keys.ps1 -WriteEnvFile
+```
+
+This writes a local `.env` file used by Docker Compose. The private key is used
+only by `auth-service`; `url-service` receives only the public key.
+
 ```powershell
 docker compose up -d --build
 ```
@@ -32,7 +41,11 @@ imported into the Kubernetes node before the app Deployments can run:
 docker compose build url-service auth-service analytics-service
 .\k8s\import-images.ps1
 .\k8s\apply-all.ps1
+.\scripts\generate-jwt-keys.ps1
 ```
+
+After `apply-all.ps1`, run the Kubernetes key commands printed by
+`generate-jwt-keys.ps1`, then restart `auth-service` and `url-service`.
 
 See `k8s/README.md` for the full local workflow and smoke-test commands.
 

@@ -45,6 +45,30 @@ use node ids `1` and `2`. This behavior is enabled by:
 APP_SNOWFLAKE_DERIVE_NODE_ID_FROM_HOSTNAME=true
 ```
 
+## JWT signing keys
+
+`auth-service` signs JWTs with an RSA private key. Services that need to trust
+those tokens, such as `url-service`, verify them with the matching RSA public
+key.
+
+The private key belongs only to `auth-service`. The public key can be shared
+with resource services because it can verify tokens but cannot sign new ones.
+
+Generate a local keypair:
+
+```powershell
+.\scripts\generate-jwt-keys.ps1
+```
+
+For Kubernetes, first apply the manifests so the namespace and ConfigMaps exist,
+then run the Kubernetes commands printed by the script. After updating the keys,
+restart the services:
+
+```powershell
+kubectl rollout restart deployment/auth-service -n tinyurl
+kubectl rollout restart statefulset/url-service -n tinyurl
+```
+
 ## Local app images
 
 Docker Desktop Kubernetes uses `containerd` inside the Kubernetes node. It does
@@ -53,9 +77,10 @@ not automatically see images from the regular Docker Engine image list.
 The application workloads use `imagePullPolicy: Never`, so the images must
 already exist in the Kubernetes node image store.
 
-First build the service images:
+First generate Docker Compose JWT keys and build the service images:
 
 ```powershell
+.\scripts\generate-jwt-keys.ps1 -WriteEnvFile
 docker compose build url-service auth-service analytics-service
 ```
 
@@ -106,12 +131,25 @@ Invoke-RestMethod http://localhost:30083/actuator/health
 
 ## Full smoke test
 
-With `url-service` forwarded to `30081` and `analytics-service` forwarded to
-`30083`:
+With `url-service` forwarded to `30081`, `auth-service` forwarded to `30082`,
+and `analytics-service` forwarded to `30083`:
 
 ```powershell
+$registerBody = @{
+  email = "ada@example.com"
+  password = "strong-password"
+} | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "http://localhost:30082/api/v1/auth/register" -ContentType "application/json" -Body $registerBody
+
+$loginBody = @{
+  email = "ada@example.com"
+  password = "strong-password"
+} | ConvertTo-Json
+$login = Invoke-RestMethod -Method Post -Uri "http://localhost:30082/api/v1/auth/login" -ContentType "application/json" -Body $loginBody
+
+$headers = @{ Authorization = "Bearer $($login.accessToken)" }
 $body = @{ originalUrl = "https://www.google.com" } | ConvertTo-Json
-$created = Invoke-RestMethod -Method Post -Uri "http://localhost:30081/api/v1/urls" -ContentType "application/json" -Body $body
+$created = Invoke-RestMethod -Method Post -Uri "http://localhost:30081/api/v1/urls" -Headers $headers -ContentType "application/json" -Body $body
 $code = $created.shortCode
 Invoke-WebRequest -Uri "http://localhost:30081/$code" -MaximumRedirection 0
 Start-Sleep -Seconds 2
