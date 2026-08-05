@@ -62,6 +62,37 @@ class SnowflakeIdGeneratorTest {
     }
 
     @Test
+    void configuredNodeIdTakesPrecedenceOverHostname() {
+        Clock clock = Clock.fixed(Instant.ofEpochMilli(START_MILLIS), ZoneOffset.UTC);
+
+        SnowflakeIdGenerator generator = new SnowflakeIdGenerator(7L, 1, false, "url-service-0", clock);
+
+        long id = generator.nextId();
+        long extractedNodeId = (id >> 12) & 1023;
+
+        assertEquals(7, extractedNodeId);
+    }
+
+    @Test
+    void derivesNodeIdFromStatefulSetHostnameWhenNodeIdIsNotConfigured() {
+        Clock clock = Clock.fixed(Instant.ofEpochMilli(START_MILLIS), ZoneOffset.UTC);
+
+        SnowflakeIdGenerator generator = new SnowflakeIdGenerator(1L, 1, true, "url-service-2", clock);
+
+        long id = generator.nextId();
+        long extractedNodeId = (id >> 12) & 1023;
+
+        assertEquals(3, extractedNodeId);
+    }
+
+    @Test
+    void throwsWhenNodeIdIsNotConfiguredAndHostnameHasNoOrdinal() {
+        Clock clock = Clock.fixed(Instant.ofEpochMilli(START_MILLIS), ZoneOffset.UTC);
+
+        assertThrows(IllegalStateException.class, () -> new SnowflakeIdGenerator(1L, 1, true, "url-service-abcd", clock));
+    }
+
+    @Test
     void sequenceOverflowWaitsForNextMillisecond() throws Exception {
         ManualClock clock = new ManualClock(START_MILLIS);
         SnowflakeIdGenerator generator = new SnowflakeIdGenerator(1, clock);

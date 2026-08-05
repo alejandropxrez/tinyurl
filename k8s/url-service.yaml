@@ -10,16 +10,19 @@ data:
   SPRING_RABBITMQ_PORT: "5672"
   SPRING_DATA_REDIS_HOST: redis
   SPRING_DATA_REDIS_PORT: "6379"
+  APP_SNOWFLAKE_NODE_ID_OFFSET: "1"
+  APP_SNOWFLAKE_DERIVE_NODE_ID_FROM_HOSTNAME: "true"
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: url-service
   namespace: tinyurl
   labels:
     app: url-service
 spec:
-  replicas: 1
+  serviceName: url-service
+  replicas: 2
   selector:
     matchLabels:
       app: url-service

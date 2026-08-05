@@ -25,12 +25,32 @@ jdbc:postgresql://postgres-urls:5432/tinyurl_urls
 Kubernetes DNS resolves `postgres-urls` to the matching database Service inside
 the `tinyurl` namespace.
 
+## Snowflake node ids
+
+`url-service` uses Snowflake-style IDs for short-code generation.
+
+The Kubernetes manifest runs `url-service` as a StatefulSet with stable Pod
+names:
+
+```text
+url-service-0
+url-service-1
+```
+
+The app derives the Snowflake node id from that ordinal plus
+`APP_SNOWFLAKE_NODE_ID_OFFSET`. With the local offset of `1`, the first two Pods
+use node ids `1` and `2`. This behavior is enabled by:
+
+```text
+APP_SNOWFLAKE_DERIVE_NODE_ID_FROM_HOSTNAME=true
+```
+
 ## Local app images
 
 Docker Desktop Kubernetes uses `containerd` inside the Kubernetes node. It does
 not automatically see images from the regular Docker Engine image list.
 
-The application Deployments use `imagePullPolicy: Never`, so the images must
+The application workloads use `imagePullPolicy: Never`, so the images must
 already exist in the Kubernetes node image store.
 
 First build the service images:
@@ -61,6 +81,7 @@ To inspect the cluster manually:
 
 ```powershell
 kubectl get deployments,svc,pvc -n tinyurl
+kubectl get statefulsets -n tinyurl
 kubectl get pods -n tinyurl -o wide
 ```
 

@@ -1,15 +1,19 @@
 package distributed.tinyurl.urlservice.idgen;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class SnowflakeIdGenerator {
 
 
     private static final long EPOCH = 1767225600000L;
+    private static final Pattern STATEFUL_SET_HOSTNAME = Pattern.compile(".+-(\\d+)$");
 
     private static final long TIMESTAMP_BITS = 41L;
     private static final long NODE_ID_BITS = 10L;
@@ -37,7 +41,18 @@ public class SnowflakeIdGenerator {
     private long lastTimestamp = -1L;
     private long sequence = 0L;
 
-    public SnowflakeIdGenerator(@Value("${app.snowflake.node-id}") long nodeId, Clock clock) {
+    @Autowired
+    public SnowflakeIdGenerator(
+            @Value("${app.snowflake.node-id}") Long configuredNodeId,
+            @Value("${app.snowflake.node-id-offset:1}") long nodeIdOffset,
+            @Value("${app.snowflake.derive-node-id-from-hostname:false}") boolean deriveNodeIdFromHostname,
+            @Value("${HOSTNAME:}") String hostname,
+            Clock clock
+    ) {
+        this(resolveNodeId(configuredNodeId, nodeIdOffset, deriveNodeIdFromHostname, hostname), clock);
+    }
+
+    SnowflakeIdGenerator(long nodeId, Clock clock) {
         if (nodeId < 0 || nodeId > MAX_NODE_ID) {
             throw new IllegalArgumentException(
                     "node-id must be between 0 and " + MAX_NODE_ID + ", received: " + nodeId);
@@ -96,5 +111,25 @@ public class SnowflakeIdGenerator {
 
     private long currentTime() {
         return clock.millis();
+    }
+
+    private static long resolveNodeId(
+            Long configuredNodeId,
+            long nodeIdOffset,
+            boolean deriveNodeIdFromHostname,
+            String hostname
+    ) {
+        if (!deriveNodeIdFromHostname) {
+            return configuredNodeId;
+        }
+
+        Matcher matcher = STATEFUL_SET_HOSTNAME.matcher(hostname);
+        if (!matcher.matches()) {
+            throw new IllegalStateException(
+                    "app.snowflake.node-id is not configured and HOSTNAME does not end with a StatefulSet ordinal: "
+                            + hostname);
+        }
+
+        return nodeIdOffset + Long.parseLong(matcher.group(1));
     }
 }

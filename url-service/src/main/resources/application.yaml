@@ -35,6 +35,8 @@ app:
     base-path: ${API_BASE_PATH:/api/v1}
   snowflake:
     node-id: ${SNOWFLAKE_NODE_ID:1}
+    node-id-offset: ${SNOWFLAKE_NODE_ID_OFFSET:1}
+    derive-node-id-from-hostname: ${SNOWFLAKE_DERIVE_NODE_ID_FROM_HOSTNAME:false}
   events:
     clicks:
       exchange: ${CLICK_EVENTS_EXCHANGE:tinyurl.clicks}

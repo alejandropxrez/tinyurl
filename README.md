@@ -35,3 +35,15 @@ docker compose build url-service auth-service analytics-service
 ```
 
 See `k8s/README.md` for the full local workflow and smoke-test commands.
+
+## ID generation
+
+`url-service` generates short codes from Snowflake-style IDs encoded as Base62.
+The generated IDs combine timestamp, node id, and per-millisecond sequence bits.
+
+Docker Compose uses `SNOWFLAKE_NODE_ID=1` because it runs one `url-service`
+container.
+
+In Kubernetes, `url-service` runs as a StatefulSet with hostname-based node id
+derivation enabled. Each Pod derives its node id from the stable Pod ordinal:
+`url-service-0` uses node id `1`, `url-service-1` uses node id `2`, and so on.
