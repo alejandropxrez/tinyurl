@@ -1,5 +1,6 @@
 package distributed.tinyurl.urlservice.ratelimit;
 
+import distributed.tinyurl.urlservice.cache.RedisKeyPrefix;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
@@ -8,10 +9,16 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 
+import static distributed.tinyurl.urlservice.observability.MetricName.RATE_LIMIT_CHECKS;
+import static distributed.tinyurl.urlservice.observability.MetricTag.OPERATION;
+import static distributed.tinyurl.urlservice.observability.MetricTag.OUTCOME;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.ALLOWED;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.BLOCKED;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.CREATE_URL;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.ERROR_ALLOWED;
+
 @Component
 public class RedisCreateUrlRateLimiter implements CreateUrlRateLimiter {
-
-    private static final String KEY_PREFIX = "rate-limit:create-url:";
 
     private final StringRedisTemplate redisTemplate;
     private final long limit;
@@ -44,22 +51,22 @@ public class RedisCreateUrlRateLimiter implements CreateUrlRateLimiter {
 
             boolean allowed = requestCount <= limit;
             meterRegistry.counter(
-                    "tinyurl_rate_limit_checks_total",
-                    "operation", "create_url",
-                    "outcome", allowed ? "allowed" : "blocked"
+                    RATE_LIMIT_CHECKS.key(),
+                    OPERATION.key(), CREATE_URL.key(),
+                    OUTCOME.key(), allowed ? ALLOWED.key() : BLOCKED.key()
             ).increment();
             return allowed;
         } catch (DataAccessException ex) {
             meterRegistry.counter(
-                    "tinyurl_rate_limit_checks_total",
-                    "operation", "create_url",
-                    "outcome", "error_allowed"
+                    RATE_LIMIT_CHECKS.key(),
+                    OPERATION.key(), CREATE_URL.key(),
+                    OUTCOME.key(), ERROR_ALLOWED.key()
             ).increment();
             return true;
         }
     }
 
     private String cacheKey(String clientId) {
-        return KEY_PREFIX + clientId;
+        return RedisKeyPrefix.CREATE_URL_RATE_LIMIT.key(clientId);
     }
 }

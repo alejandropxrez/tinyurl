@@ -6,6 +6,11 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import static distributed.tinyurl.urlservice.observability.MetricName.CLICK_EVENTS_PUBLISHED;
+import static distributed.tinyurl.urlservice.observability.MetricTag.OUTCOME;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.ERROR;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.SUCCESS;
+
 @Component
 public class RabbitClickEventPublisher implements ClickEventPublisher {
 
@@ -30,9 +35,9 @@ public class RabbitClickEventPublisher implements ClickEventPublisher {
     public void publish(ClickRecordedEvent event) {
         try {
             rabbitTemplate.convertAndSend(exchange, routingKey, event);
-            meterRegistry.counter("tinyurl_click_events_published_total", "outcome", "success").increment();
+            meterRegistry.counter(CLICK_EVENTS_PUBLISHED.key(), OUTCOME.key(), SUCCESS.key()).increment();
         } catch (AmqpException ignored) {
-            meterRegistry.counter("tinyurl_click_events_published_total", "outcome", "error").increment();
+            meterRegistry.counter(CLICK_EVENTS_PUBLISHED.key(), OUTCOME.key(), ERROR.key()).increment();
             // Analytics must never block the redirect path.
         }
     }

@@ -5,6 +5,8 @@ import distributed.tinyurl.analyticsservice.repository.ClickEventRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 
+import static distributed.tinyurl.analyticsservice.observability.MetricName.CLICK_COUNT_QUERIES;
+
 @Service
 public class AnalyticsQueryService {
 
@@ -18,7 +20,7 @@ public class AnalyticsQueryService {
 
     public UrlClickCountResponse countClicks(String shortCode) {
         long clicks = clickEventRepository.countByShortCode(shortCode);
-        meterRegistry.counter("tinyurl_analytics_click_count_queries_total").increment();
+        meterRegistry.counter(CLICK_COUNT_QUERIES.key()).increment();
         return new UrlClickCountResponse(shortCode, clicks);
     }
 }

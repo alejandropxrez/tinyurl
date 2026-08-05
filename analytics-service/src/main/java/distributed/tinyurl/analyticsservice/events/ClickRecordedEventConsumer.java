@@ -6,6 +6,10 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
+import static distributed.tinyurl.analyticsservice.observability.MetricName.CLICK_EVENTS_CONSUMED;
+import static distributed.tinyurl.analyticsservice.observability.MetricTag.OUTCOME;
+import static distributed.tinyurl.analyticsservice.observability.MetricTagValue.SUCCESS;
+
 @Component
 public class ClickRecordedEventConsumer {
 
@@ -23,6 +27,6 @@ public class ClickRecordedEventConsumer {
                 .shortCode(event.shortCode())
                 .clickedAt(event.clickedAt())
                 .build());
-        meterRegistry.counter("tinyurl_click_events_consumed_total", "outcome", "success").increment();
+        meterRegistry.counter(CLICK_EVENTS_CONSUMED.key(), OUTCOME.key(), SUCCESS.key()).increment();
     }
 }

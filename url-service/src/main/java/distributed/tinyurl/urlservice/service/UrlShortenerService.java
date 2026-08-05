@@ -22,6 +22,17 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 
+import static distributed.tinyurl.urlservice.observability.MetricName.REDIRECTS;
+import static distributed.tinyurl.urlservice.observability.MetricName.URL_CREATIONS;
+import static distributed.tinyurl.urlservice.observability.MetricName.URL_DELETIONS;
+import static distributed.tinyurl.urlservice.observability.MetricName.URL_UPDATES;
+import static distributed.tinyurl.urlservice.observability.MetricTag.OUTCOME;
+import static distributed.tinyurl.urlservice.observability.MetricTag.SOURCE;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.CACHE;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.DATABASE;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.EXPIRED;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.SUCCESS;
+
 @Service
 public class UrlShortenerService {
 
@@ -63,7 +74,7 @@ public class UrlShortenerService {
                 .build();
 
         Url saved = urlRepository.save(url);
-        meterRegistry.counter("tinyurl.url.creations").increment();
+        meterRegistry.counter(URL_CREATIONS.key()).increment();
 
         return new CreateUrlResponse(
                 saved.getShortCode(),
@@ -82,12 +93,12 @@ public class UrlShortenerService {
 
     private String resolveFromCache(String shortCode, CachedRedirect cachedRedirect) {
         if (cachedRedirect.expiresAt() != null && cachedRedirect.expiresAt().isBefore(Instant.now(clock))) {
-            meterRegistry.counter("tinyurl_redirects_total", "outcome", "expired", "source", "cache").increment();
+            meterRegistry.counter(REDIRECTS.key(), OUTCOME.key(), EXPIRED.key(), SOURCE.key(), CACHE.key()).increment();
             throw new UrlExpiredException(shortCode);
         }
 
         publishClick(shortCode);
-        meterRegistry.counter("tinyurl_redirects_total", "outcome", "success", "source", "cache").increment();
+        meterRegistry.counter(REDIRECTS.key(), OUTCOME.key(), SUCCESS.key(), SOURCE.key(), CACHE.key()).increment();
         return cachedRedirect.originalUrl();
     }
 
@@ -95,13 +106,13 @@ public class UrlShortenerService {
         Url url = findByShortCodeOrThrow(shortCode);
 
         if (url.getExpiresAt() != null && url.getExpiresAt().isBefore(Instant.now(clock))) {
-            meterRegistry.counter("tinyurl_redirects_total", "outcome", "expired", "source", "database").increment();
+            meterRegistry.counter(REDIRECTS.key(), OUTCOME.key(), EXPIRED.key(), SOURCE.key(), DATABASE.key()).increment();
             throw new UrlExpiredException(shortCode);
         }
 
         urlRedirectCache.save(shortCode, new CachedRedirect(url.getOriginalUrl(), url.getExpiresAt()));
         publishClick(shortCode);
-        meterRegistry.counter("tinyurl_redirects_total", "outcome", "success", "source", "database").increment();
+        meterRegistry.counter(REDIRECTS.key(), OUTCOME.key(), SUCCESS.key(), SOURCE.key(), DATABASE.key()).increment();
 
         return url.getOriginalUrl();
     }
@@ -133,7 +144,7 @@ public class UrlShortenerService {
 
         urlRepository.delete(url);
         urlRedirectCache.delete(shortCode);
-        meterRegistry.counter("tinyurl.url.deletions").increment();
+        meterRegistry.counter(URL_DELETIONS.key()).increment();
     }
 
     public UrlSummaryResponse update(String shortCode, Long userId, UpdateUrlRequest request) {
@@ -146,7 +157,7 @@ public class UrlShortenerService {
 
         Url saved = urlRepository.save(url);
         urlRedirectCache.delete(shortCode);
-        meterRegistry.counter("tinyurl.url.updates").increment();
+        meterRegistry.counter(URL_UPDATES.key()).increment();
 
         return toSummaryResponse(saved);
     }

@@ -11,6 +11,7 @@ import distributed.tinyurl.authservice.exception.InvalidCredentialsException;
 import distributed.tinyurl.authservice.exception.InvalidRefreshTokenException;
 import distributed.tinyurl.authservice.model.RefreshToken;
 import distributed.tinyurl.authservice.model.User;
+import distributed.tinyurl.authservice.observability.AuthMetricOperation;
 import distributed.tinyurl.authservice.repository.RefreshTokenRepository;
 import distributed.tinyurl.authservice.repository.UserRepository;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -26,6 +27,14 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Locale;
+
+import static distributed.tinyurl.authservice.observability.MetricName.AUTH_LOGINS;
+import static distributed.tinyurl.authservice.observability.MetricName.AUTH_LOGOUTS;
+import static distributed.tinyurl.authservice.observability.MetricName.AUTH_REFRESHES;
+import static distributed.tinyurl.authservice.observability.MetricName.AUTH_REGISTRATIONS;
+import static distributed.tinyurl.authservice.observability.MetricTag.OUTCOME;
+import static distributed.tinyurl.authservice.observability.MetricTagValue.FAILURE;
+import static distributed.tinyurl.authservice.observability.MetricTagValue.SUCCESS;
 
 @Service
 @Transactional
@@ -73,7 +82,7 @@ public class AuthService {
                 .build();
 
         User saved = userRepository.save(user);
-        meterRegistry.counter("tinyurl_auth_registrations_total", "outcome", "success").increment();
+        meterRegistry.counter(AUTH_REGISTRATIONS.key(), OUTCOME.key(), SUCCESS.key()).increment();
 
         return new RegisterResponse(saved.getId(), saved.getEmail(), saved.getCreatedAt());
     }
@@ -82,31 +91,31 @@ public class AuthService {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> {
-                    meterRegistry.counter("tinyurl_auth_logins_total", "outcome", "failure").increment();
+                    meterRegistry.counter(AUTH_LOGINS.key(), OUTCOME.key(), FAILURE.key()).increment();
                     return new InvalidCredentialsException();
                 });
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            meterRegistry.counter("tinyurl_auth_logins_total", "outcome", "failure").increment();
+            meterRegistry.counter(AUTH_LOGINS.key(), OUTCOME.key(), FAILURE.key()).increment();
             throw new InvalidCredentialsException();
         }
 
-        meterRegistry.counter("tinyurl_auth_logins_total", "outcome", "success").increment();
+        meterRegistry.counter(AUTH_LOGINS.key(), OUTCOME.key(), SUCCESS.key()).increment();
         return createTokenPair(user);
     }
 
     public LoginResponse refresh(RefreshTokenRequest request) {
-        RefreshToken refreshToken = findValidRefreshToken(request.refreshToken(), "refresh");
+        RefreshToken refreshToken = findValidRefreshToken(request.refreshToken(), AuthMetricOperation.REFRESH);
         refreshToken.setRevokedAt(Instant.now(clock));
 
-        meterRegistry.counter("tinyurl_auth_refreshes_total", "outcome", "success").increment();
+        meterRegistry.counter(AUTH_REFRESHES.key(), OUTCOME.key(), SUCCESS.key()).increment();
         return createTokenPair(refreshToken.getUser());
     }
 
     public void logout(RefreshTokenRequest request) {
-        RefreshToken refreshToken = findValidRefreshToken(request.refreshToken(), "logout");
+        RefreshToken refreshToken = findValidRefreshToken(request.refreshToken(), AuthMetricOperation.LOGOUT);
         refreshToken.setRevokedAt(Instant.now(clock));
-        meterRegistry.counter("tinyurl_auth_logouts_total", "outcome", "success").increment();
+        meterRegistry.counter(AUTH_LOGOUTS.key(), OUTCOME.key(), SUCCESS.key()).increment();
     }
 
     private LoginResponse createTokenPair(User user) {
@@ -128,7 +137,7 @@ public class AuthService {
         );
     }
 
-    private RefreshToken findValidRefreshToken(String rawRefreshToken, String operation) {
+    private RefreshToken findValidRefreshToken(String rawRefreshToken, AuthMetricOperation operation) {
         RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(hashRefreshToken(rawRefreshToken))
                 .orElseThrow(() -> {
                     recordInvalidRefreshToken(operation);
@@ -143,12 +152,8 @@ public class AuthService {
         return refreshToken;
     }
 
-    private void recordInvalidRefreshToken(String operation) {
-        if ("refresh".equals(operation)) {
-            meterRegistry.counter("tinyurl_auth_refreshes_total", "outcome", "failure").increment();
-        } else if ("logout".equals(operation)) {
-            meterRegistry.counter("tinyurl_auth_logouts_total", "outcome", "failure").increment();
-        }
+    private void recordInvalidRefreshToken(AuthMetricOperation operation) {
+        meterRegistry.counter(operation.metricName().key(), OUTCOME.key(), FAILURE.key()).increment();
     }
 
     private String generateRefreshToken() {

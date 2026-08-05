@@ -2,6 +2,7 @@ package distributed.tinyurl.urlservice.cache;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import distributed.tinyurl.urlservice.observability.MetricTagValue;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
@@ -13,10 +14,17 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
+import static distributed.tinyurl.urlservice.observability.MetricName.REDIRECT_CACHE_EVICTIONS;
+import static distributed.tinyurl.urlservice.observability.MetricName.REDIRECT_CACHE_REQUESTS;
+import static distributed.tinyurl.urlservice.observability.MetricName.REDIRECT_CACHE_WRITES;
+import static distributed.tinyurl.urlservice.observability.MetricTag.OUTCOME;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.ERROR;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.HIT;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.MISS;
+import static distributed.tinyurl.urlservice.observability.MetricTagValue.SUCCESS;
+
 @Component
 public class RedisUrlRedirectCache implements UrlRedirectCache {
-
-    private static final String KEY_PREFIX = "redirect:";
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
@@ -43,13 +51,13 @@ public class RedisUrlRedirectCache implements UrlRedirectCache {
         try {
             String json = redisTemplate.opsForValue().get(cacheKey(shortCode));
             if (json == null) {
-                recordCacheRequest("miss");
+                recordCacheRequest(MISS);
                 return Optional.empty();
             }
-            recordCacheRequest("hit");
+            recordCacheRequest(HIT);
             return Optional.of(objectMapper.readValue(json, CachedRedirect.class));
         } catch (JsonProcessingException | DataAccessException ex) {
-            recordCacheRequest("error");
+            recordCacheRequest(ERROR);
             return Optional.empty();
         }
     }
@@ -59,9 +67,9 @@ public class RedisUrlRedirectCache implements UrlRedirectCache {
         try {
             String json = objectMapper.writeValueAsString(redirect);
             redisTemplate.opsForValue().set(cacheKey(shortCode), json, effectiveTtl(redirect));
-            meterRegistry.counter("tinyurl_redirect_cache_writes_total", "outcome", "success").increment();
+            meterRegistry.counter(REDIRECT_CACHE_WRITES.key(), OUTCOME.key(), SUCCESS.key()).increment();
         } catch (JsonProcessingException | DataAccessException ignored) {
-            meterRegistry.counter("tinyurl_redirect_cache_writes_total", "outcome", "error").increment();
+            meterRegistry.counter(REDIRECT_CACHE_WRITES.key(), OUTCOME.key(), ERROR.key()).increment();
             // Redis is an optimization for redirects, not the source of truth.
         }
     }
@@ -70,19 +78,19 @@ public class RedisUrlRedirectCache implements UrlRedirectCache {
     public void delete(String shortCode) {
         try {
             redisTemplate.delete(cacheKey(shortCode));
-            meterRegistry.counter("tinyurl_redirect_cache_evictions_total", "outcome", "success").increment();
+            meterRegistry.counter(REDIRECT_CACHE_EVICTIONS.key(), OUTCOME.key(), SUCCESS.key()).increment();
         } catch (DataAccessException ignored) {
-            meterRegistry.counter("tinyurl_redirect_cache_evictions_total", "outcome", "error").increment();
+            meterRegistry.counter(REDIRECT_CACHE_EVICTIONS.key(), OUTCOME.key(), ERROR.key()).increment();
             // Postgres remains the source of truth if Redis is temporarily unavailable.
         }
     }
 
-    private void recordCacheRequest(String outcome) {
-        meterRegistry.counter("tinyurl_redirect_cache_requests_total", "outcome", outcome).increment();
+    private void recordCacheRequest(MetricTagValue outcome) {
+        meterRegistry.counter(REDIRECT_CACHE_REQUESTS.key(), OUTCOME.key(), outcome.key()).increment();
     }
 
     private String cacheKey(String shortCode) {
-        return KEY_PREFIX + shortCode;
+        return RedisKeyPrefix.REDIRECT.key(shortCode);
     }
 
     private Duration effectiveTtl(CachedRedirect redirect) {
