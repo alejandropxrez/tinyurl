@@ -24,3 +24,6 @@ management:
 app:
   api:
     base-path: ${API_BASE_PATH:/api/v1}
+  jwt:
+    secret: ${JWT_SECRET:local-development-secret-for-auth-service-32chars}
+    expiration: ${JWT_EXPIRATION:PT1H}

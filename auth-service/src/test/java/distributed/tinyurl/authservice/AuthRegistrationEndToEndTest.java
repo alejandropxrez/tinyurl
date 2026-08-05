@@ -1,8 +1,10 @@
 package distributed.tinyurl.authservice;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import distributed.tinyurl.authservice.dto.LoginRequest;
 import distributed.tinyurl.authservice.dto.RegisterRequest;
 import distributed.tinyurl.authservice.repository.UserRepository;
+import distributed.tinyurl.authservice.service.JwtService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +36,9 @@ class AuthRegistrationEndToEndTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtService jwtService;
 
     @BeforeEach
     void setUp() {
@@ -85,5 +90,48 @@ class AuthRegistrationEndToEndTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void loginReturnsBearerTokenWhenCredentialsAreValid() throws Exception {
+        RegisterRequest registerRequest = new RegisterRequest("Ada@Example.com", "strong-password");
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerRequest)))
+                .andExpect(status().isCreated());
+
+        LoginRequest loginRequest = new LoginRequest("ada@example.com", "strong-password");
+
+        String response = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isString())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn").value(3600))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String accessToken = objectMapper.readTree(response).get("accessToken").asText();
+        assertThat(jwtService.extractSubject(accessToken)).isEqualTo("ada@example.com");
+    }
+
+    @Test
+    void loginReturns401WhenPasswordIsWrong() throws Exception {
+        RegisterRequest registerRequest = new RegisterRequest("ada@example.com", "strong-password");
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerRequest)))
+                .andExpect(status().isCreated());
+
+        LoginRequest loginRequest = new LoginRequest("ada@example.com", "wrong-password");
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("Unauthorized"));
     }
 }

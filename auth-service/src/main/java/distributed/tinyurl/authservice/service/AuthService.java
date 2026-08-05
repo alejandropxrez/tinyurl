@@ -1,8 +1,11 @@
 package distributed.tinyurl.authservice.service;
 
+import distributed.tinyurl.authservice.dto.LoginRequest;
+import distributed.tinyurl.authservice.dto.LoginResponse;
 import distributed.tinyurl.authservice.dto.RegisterRequest;
 import distributed.tinyurl.authservice.dto.RegisterResponse;
 import distributed.tinyurl.authservice.exception.EmailAlreadyRegisteredException;
+import distributed.tinyurl.authservice.exception.InvalidCredentialsException;
 import distributed.tinyurl.authservice.model.User;
 import distributed.tinyurl.authservice.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,10 +18,12 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
     }
 
     public RegisterResponse register(RegisterRequest request) {
@@ -36,5 +41,17 @@ public class AuthService {
         User saved = userRepository.save(user);
 
         return new RegisterResponse(saved.getId(), saved.getEmail(), saved.getCreatedAt());
+    }
+
+    public LoginResponse login(LoginRequest request) {
+        String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(InvalidCredentialsException::new);
+
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new InvalidCredentialsException();
+        }
+
+        return new LoginResponse(jwtService.createAccessToken(user), "Bearer", jwtService.expiresInSeconds());
     }
 }
