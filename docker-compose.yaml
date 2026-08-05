@@ -4,14 +4,14 @@ services:
     container_name: tinyurl-postgres-urls
     environment:
       POSTGRES_DB: tinyurl_urls
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_URLS_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_URLS_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - postgres_urls_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_URLS_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,14 +21,14 @@ services:
     container_name: tinyurl-postgres-auth
     environment:
       POSTGRES_DB: tinyurl_auth
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_AUTH_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_AUTH_PASSWORD}
     ports:
       - "5433:5432"
     volumes:
       - postgres_auth_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_AUTH_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -38,14 +38,14 @@ services:
     container_name: tinyurl-postgres-analytics
     environment:
       POSTGRES_DB: tinyurl_analytics
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_ANALYTICS_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ANALYTICS_PASSWORD}
     ports:
       - "5434:5432"
     volumes:
       - postgres_analytics_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ANALYTICS_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -53,6 +53,9 @@ services:
   rabbitmq:
     image: rabbitmq:4-management-alpine
     container_name: tinyurl-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -79,10 +82,12 @@ services:
     container_name: tinyurl-url-service
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-urls:5432/tinyurl_urls
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_URLS_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_URLS_PASSWORD}
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       APP_BASE_URL: http://localhost:8081
@@ -104,10 +109,12 @@ services:
     container_name: tinyurl-analytics-service
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-analytics:5432/tinyurl_analytics
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_ANALYTICS_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_ANALYTICS_PASSWORD}
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
     ports:
       - "8083:8083"
     depends_on:
@@ -122,8 +129,8 @@ services:
     container_name: tinyurl-auth-service
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/tinyurl_auth
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_AUTH_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_AUTH_PASSWORD}
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
     ports:
@@ -152,8 +159,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
     volumes:
       - grafana_data:/var/lib/grafana
     depends_on:

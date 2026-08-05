@@ -24,7 +24,9 @@ Generate local JWT keys before starting the services:
 ```
 
 This writes a local `.env` file used by Docker Compose. The private key is used
-only by `auth-service`; `url-service` receives only the public key.
+only by `auth-service`; `url-service` receives only the public key. The same
+file also provides local Postgres, RabbitMQ, and Grafana credentials used by
+Docker Compose. Local passwords are generated unless you pass explicit values.
 
 ```powershell
 docker compose up -d --build

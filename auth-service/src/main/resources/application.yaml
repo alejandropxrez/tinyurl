@@ -3,8 +3,8 @@ spring:
     name: auth-service
   datasource:
     url: jdbc:postgresql://localhost:5433/tinyurl_auth
-    username: postgres
-    password: postgres
+    username: ${POSTGRES_AUTH_USER}
+    password: ${POSTGRES_AUTH_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: validate

@@ -3,8 +3,8 @@ spring:
     name: url-service
   datasource:
     url: jdbc:postgresql://localhost:5432/tinyurl_urls
-    username: postgres
-    password: postgres
+    username: ${POSTGRES_URLS_USER}
+    password: ${POSTGRES_URLS_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -14,8 +14,8 @@ spring:
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
   data:
     redis:
       host: ${REDIS_HOST:localhost}

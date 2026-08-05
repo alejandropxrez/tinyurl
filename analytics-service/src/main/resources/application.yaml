@@ -3,8 +3,8 @@ spring:
         name: analytics-service
     datasource:
         url: jdbc:postgresql://localhost:5434/tinyurl_analytics
-        username: postgres
-        password: postgres
+        username: ${POSTGRES_ANALYTICS_USER}
+        password: ${POSTGRES_ANALYTICS_PASSWORD}
     jpa:
         hibernate:
             ddl-auto: validate
@@ -14,8 +14,8 @@ spring:
     rabbitmq:
         host: ${RABBITMQ_HOST:localhost}
         port: ${RABBITMQ_PORT:5672}
-        username: ${RABBITMQ_USERNAME:guest}
-        password: ${RABBITMQ_PASSWORD:guest}
+        username: ${RABBITMQ_USERNAME}
+        password: ${RABBITMQ_PASSWORD}
 
 server:
     port: 8083
