@@ -33,6 +33,8 @@ app:
   base-url: ${APP_BASE_URL:http://localhost:8081}
   api:
     base-path: ${API_BASE_PATH:/api/v1}
+  jwt:
+    public-key: ${JWT_PUBLIC_KEY}
   snowflake:
     node-id: ${SNOWFLAKE_NODE_ID:1}
     node-id-offset: ${SNOWFLAKE_NODE_ID_OFFSET:1}

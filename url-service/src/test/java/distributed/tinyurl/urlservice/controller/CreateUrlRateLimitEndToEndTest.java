@@ -11,6 +11,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -29,6 +31,11 @@ class CreateUrlRateLimitEndToEndTest {
 
     private static final String CLIENT_IP = "203.0.113.10";
     private static final String RATE_LIMIT_KEY = "rate-limit:create-url:" + CLIENT_IP;
+
+    @DynamicPropertySource
+    static void jwtProperties(DynamicPropertyRegistry registry) {
+        registry.add("app.jwt.public-key", JwtTestTokens::publicKey);
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -50,6 +57,7 @@ class CreateUrlRateLimitEndToEndTest {
         String json = objectMapper.writeValueAsString(request);
 
         mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken())
                         .with(servletRequest -> {
                             servletRequest.setRemoteAddr(CLIENT_IP);
                             return servletRequest;
@@ -59,6 +67,7 @@ class CreateUrlRateLimitEndToEndTest {
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken())
                         .with(servletRequest -> {
                             servletRequest.setRemoteAddr(CLIENT_IP);
                             return servletRequest;
@@ -68,6 +77,7 @@ class CreateUrlRateLimitEndToEndTest {
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken())
                         .with(servletRequest -> {
                             servletRequest.setRemoteAddr(CLIENT_IP);
                             return servletRequest;

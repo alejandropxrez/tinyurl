@@ -5,6 +5,7 @@ metadata:
   namespace: tinyurl
 data:
   APP_BASE_URL: http://localhost:30081
+  JWT_PUBLIC_KEY: replace-with-base64-rsa-public-key
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-urls:5432/tinyurl_urls
   SPRING_RABBITMQ_HOST: rabbitmq
   SPRING_RABBITMQ_PORT: "5672"

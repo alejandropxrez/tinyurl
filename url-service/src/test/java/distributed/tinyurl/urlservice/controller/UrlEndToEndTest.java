@@ -4,16 +4,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import distributed.tinyurl.urlservice.TestcontainersConfiguration;
 import distributed.tinyurl.urlservice.dto.CreateUrlRequest;
+import distributed.tinyurl.urlservice.repository.UrlRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -23,8 +27,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(TestcontainersConfiguration.class)
 class UrlEndToEndTest {
 
+    @DynamicPropertySource
+    static void jwtProperties(DynamicPropertyRegistry registry) {
+        registry.add("app.jwt.public-key", JwtTestTokens::publicKey);
+    }
+
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private UrlRepository urlRepository;
 
     private final ObjectMapper jsonMapper = JsonMapper.builder().findAndAddModules().build();
 
@@ -33,6 +45,7 @@ class UrlEndToEndTest {
         CreateUrlRequest request = new CreateUrlRequest("https://www.anthropic.com", null);
 
         String responseJson = mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -43,6 +56,7 @@ class UrlEndToEndTest {
                 .getContentAsString();
 
         String shortCode = jsonMapper.readTree(responseJson).get("shortCode").asText();
+        assertThat(urlRepository.findByShortCode(shortCode).orElseThrow().getUserId()).isEqualTo(1L);
 
         mockMvc.perform(get("/{code}", shortCode))
                 .andExpect(status().isFound())
@@ -69,6 +83,7 @@ class UrlEndToEndTest {
         );
 
         String responseJson = mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(expiredRequest)))
                 .andExpect(status().isCreated())
@@ -88,6 +103,7 @@ class UrlEndToEndTest {
         CreateUrlRequest invalidRequest = new CreateUrlRequest("no-es-una-url", null);
 
         mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest())
@@ -99,9 +115,34 @@ class UrlEndToEndTest {
         CreateUrlRequest invalidRequest = new CreateUrlRequest("", null);
 
         mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createShortUrlReturns401WhenTokenIsMissing() throws Exception {
+        CreateUrlRequest request = new CreateUrlRequest("https://www.anthropic.com", null);
+
+        mockMvc.perform(post("/api/v1/urls")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    void createShortUrlReturns401WhenTokenIsInvalid() throws Exception {
+        CreateUrlRequest request = new CreateUrlRequest("https://www.anthropic.com", null);
+
+        mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", "Bearer not-a-real-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.message").value("Invalid access token"));
     }
 
     @Test

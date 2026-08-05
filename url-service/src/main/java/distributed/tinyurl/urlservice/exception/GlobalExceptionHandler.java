@@ -1,5 +1,6 @@
 package distributed.tinyurl.urlservice.exception;
 
+import distributed.tinyurl.urlservice.security.InvalidJwtException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -31,6 +32,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(ApiError.of(429, "Too Many Requests", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidJwtException.class)
+    public ResponseEntity<ApiError> handleInvalidJwt() {
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiError.of(401, "Unauthorized", "Invalid access token"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

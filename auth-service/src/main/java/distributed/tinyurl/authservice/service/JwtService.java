@@ -1,13 +1,13 @@
 package distributed.tinyurl.authservice.service;
 
 import distributed.tinyurl.authservice.config.JwtProperties;
+import distributed.tinyurl.authservice.config.RsaKeyUtils;
 import distributed.tinyurl.authservice.model.User;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.time.Instant;
 import java.util.Date;
 
@@ -29,13 +29,13 @@ public class JwtService {
                 .claim("userId", user.getId())
                 .issuedAt(Date.from(issuedAt))
                 .expiration(Date.from(expiresAt))
-                .signWith(secretKey())
+                .signWith(privateKey(), Jwts.SIG.RS256)
                 .compact();
     }
 
     public String extractSubject(String token) {
         return Jwts.parser()
-                .verifyWith(secretKey())
+                .verifyWith(publicKey())
                 .build()
                 .parseSignedClaims(token)
                 .getPayload()
@@ -46,7 +46,11 @@ public class JwtService {
         return jwtProperties.expiration().toSeconds();
     }
 
-    private SecretKey secretKey() {
-        return Keys.hmacShaKeyFor(jwtProperties.secret().getBytes(StandardCharsets.UTF_8));
+    private PrivateKey privateKey() {
+        return RsaKeyUtils.privateKeyFromBase64(jwtProperties.privateKey());
+    }
+
+    private PublicKey publicKey() {
+        return RsaKeyUtils.publicKeyFromBase64(jwtProperties.publicKey());
     }
 }

@@ -87,6 +87,7 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       APP_BASE_URL: http://localhost:8081
       SNOWFLAKE_NODE_ID: 1
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
     ports:
       - "8081:8081"
     depends_on:
@@ -123,6 +124,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/tinyurl_auth
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
     ports:
       - "8082:8082"
     depends_on:

@@ -5,6 +5,15 @@ metadata:
   namespace: tinyurl
 data:
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-auth:5432/tinyurl_auth
+  JWT_PUBLIC_KEY: replace-with-base64-rsa-public-key
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: auth-jwt-signing-secret
+  namespace: tinyurl
+stringData:
+  private-key: replace-with-base64-rsa-private-key
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -43,6 +52,11 @@ spec:
                 secretKeyRef:
                   name: postgres-auth-secret
                   key: password
+            - name: JWT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auth-jwt-signing-secret
+                  key: private-key
           readinessProbe:
             httpGet:
               path: /actuator/health

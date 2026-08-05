@@ -45,11 +45,16 @@ public class UrlShortenerService {
     }
 
     public CreateUrlResponse shorten(CreateUrlRequest request) {
+        return shorten(request, null);
+    }
+
+    public CreateUrlResponse shorten(CreateUrlRequest request, Long userId) {
         String shortCode = shortCodeGenerator.nextCode();
 
         Url url = Url.builder()
                 .shortCode(shortCode)
                 .originalUrl(request.originalUrl())
+                .userId(userId)
                 .expiresAt(request.expiresAt())
                 .clickCount(0L)
                 .build();
