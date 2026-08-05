@@ -2,6 +2,8 @@ package distributed.tinyurl.urlservice.service;
 
 import distributed.tinyurl.urlservice.dto.CreateUrlRequest;
 import distributed.tinyurl.urlservice.dto.CreateUrlResponse;
+import distributed.tinyurl.urlservice.dto.UpdateUrlRequest;
+import distributed.tinyurl.urlservice.dto.UrlSummaryResponse;
 import distributed.tinyurl.urlservice.dto.UrlStatsResponse;
 import distributed.tinyurl.urlservice.cache.CachedRedirect;
 import distributed.tinyurl.urlservice.cache.UrlRedirectCache;
@@ -226,6 +228,48 @@ class UrlShortenerServiceTest {
                 .isInstanceOf(UrlNotFoundException.class);
 
         verify(urlRepository, never()).delete(any(Url.class));
+        verify(urlRedirectCache, never()).delete(anyString());
+    }
+
+    @Test
+    void updateChangesOwnedUrlAndEvictsRedirectCache() {
+        Url url = Url.builder()
+                .shortCode("abc123X")
+                .originalUrl("https://www.anthropic.com")
+                .userId(1L)
+                .createdAt(FIXED_NOW)
+                .clickCount(0L)
+                .build();
+
+        Instant expiresAt = FIXED_NOW.plusSeconds(3600);
+        when(urlRepository.findByShortCodeAndUserId("abc123X", 1L)).thenReturn(Optional.of(url));
+        when(urlRepository.save(url)).thenReturn(url);
+
+        UrlSummaryResponse response = service.update(
+                "abc123X",
+                1L,
+                new UpdateUrlRequest("https://www.google.com", expiresAt)
+        );
+
+        assertThat(response.originalUrl()).isEqualTo("https://www.google.com");
+        assertThat(response.expiresAt()).isEqualTo(expiresAt);
+        assertThat(url.getOriginalUrl()).isEqualTo("https://www.google.com");
+        assertThat(url.getExpiresAt()).isEqualTo(expiresAt);
+        verify(urlRepository).save(url);
+        verify(urlRedirectCache).delete("abc123X");
+    }
+
+    @Test
+    void updateThrowsWhenUrlDoesNotBelongToUser() {
+        when(urlRepository.findByShortCodeAndUserId("abc123X", 2L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.update(
+                "abc123X",
+                2L,
+                new UpdateUrlRequest("https://www.google.com", null)
+        )).isInstanceOf(UrlNotFoundException.class);
+
+        verify(urlRepository, never()).save(any(Url.class));
         verify(urlRedirectCache, never()).delete(anyString());
     }
 }

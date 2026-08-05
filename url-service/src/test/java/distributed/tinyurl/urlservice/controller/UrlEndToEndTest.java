@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import distributed.tinyurl.urlservice.TestcontainersConfiguration;
 import distributed.tinyurl.urlservice.dto.CreateUrlRequest;
+import distributed.tinyurl.urlservice.dto.UpdateUrlRequest;
 import distributed.tinyurl.urlservice.repository.UrlRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -262,6 +263,90 @@ class UrlEndToEndTest {
     @Test
     void deleteReturns401WhenTokenIsMissing() throws Exception {
         mockMvc.perform(delete("/api/v1/urls/{code}", "abc123X"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateChangesOwnedUrlAndEvictsCachedRedirect() throws Exception {
+        CreateUrlRequest createRequest = new CreateUrlRequest("https://www.anthropic.com", null);
+
+        String responseJson = mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken(1L, "ada@example.com"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(createRequest)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String shortCode = jsonMapper.readTree(responseJson).get("shortCode").asText();
+
+        mockMvc.perform(get("/{code}", shortCode))
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", "https://www.anthropic.com"));
+
+        UpdateUrlRequest updateRequest = new UpdateUrlRequest("https://www.google.com", null);
+
+        mockMvc.perform(patch("/api/v1/urls/{code}", shortCode)
+                        .header("Authorization", JwtTestTokens.bearerToken(1L, "ada@example.com"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.shortCode").value(shortCode))
+                .andExpect(jsonPath("$.originalUrl").value("https://www.google.com"));
+
+        assertThat(urlRepository.findByShortCode(shortCode).orElseThrow().getOriginalUrl())
+                .isEqualTo("https://www.google.com");
+
+        mockMvc.perform(get("/{code}", shortCode))
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", "https://www.google.com"));
+    }
+
+    @Test
+    void updateReturns404WhenUrlBelongsToAnotherUser() throws Exception {
+        CreateUrlRequest createRequest = new CreateUrlRequest("https://www.anthropic.com", null);
+
+        String responseJson = mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken(1L, "ada@example.com"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(createRequest)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String shortCode = jsonMapper.readTree(responseJson).get("shortCode").asText();
+        UpdateUrlRequest updateRequest = new UpdateUrlRequest("https://www.google.com", null);
+
+        mockMvc.perform(patch("/api/v1/urls/{code}", shortCode)
+                        .header("Authorization", JwtTestTokens.bearerToken(2L, "grace@example.com"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isNotFound());
+
+        assertThat(urlRepository.findByShortCode(shortCode).orElseThrow().getOriginalUrl())
+                .isEqualTo("https://www.anthropic.com");
+    }
+
+    @Test
+    void updateReturns400WhenOriginalUrlIsInvalid() throws Exception {
+        UpdateUrlRequest updateRequest = new UpdateUrlRequest("not-a-url", null);
+
+        mockMvc.perform(patch("/api/v1/urls/{code}", "abc123X")
+                        .header("Authorization", JwtTestTokens.bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateReturns401WhenTokenIsMissing() throws Exception {
+        UpdateUrlRequest updateRequest = new UpdateUrlRequest("https://www.google.com", null);
+
+        mockMvc.perform(patch("/api/v1/urls/{code}", "abc123X")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isUnauthorized());
     }
 }

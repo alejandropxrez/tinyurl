@@ -2,6 +2,7 @@ package distributed.tinyurl.urlservice.controller;
 
 import distributed.tinyurl.urlservice.dto.CreateUrlRequest;
 import distributed.tinyurl.urlservice.dto.CreateUrlResponse;
+import distributed.tinyurl.urlservice.dto.UpdateUrlRequest;
 import distributed.tinyurl.urlservice.dto.UrlSummaryResponse;
 import distributed.tinyurl.urlservice.dto.UrlStatsResponse;
 import distributed.tinyurl.urlservice.exception.RateLimitExceededException;
@@ -59,6 +60,15 @@ public class UrlManagementController {
             @AuthenticationPrincipal JwtPrincipal principal
     ) {
         return ResponseEntity.ok(urlShortenerService.getStats(code, principal.userId()));
+    }
+
+    @PatchMapping("/{code}")
+    public ResponseEntity<UrlSummaryResponse> update(
+            @PathVariable String code,
+            @Valid @RequestBody UpdateUrlRequest request,
+            @AuthenticationPrincipal JwtPrincipal principal
+    ) {
+        return ResponseEntity.ok(urlShortenerService.update(code, principal.userId(), request));
     }
 
     @DeleteMapping("/{code}")

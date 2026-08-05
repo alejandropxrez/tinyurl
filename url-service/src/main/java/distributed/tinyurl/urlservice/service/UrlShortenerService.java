@@ -2,6 +2,7 @@ package distributed.tinyurl.urlservice.service;
 
 import distributed.tinyurl.urlservice.dto.CreateUrlRequest;
 import distributed.tinyurl.urlservice.dto.CreateUrlResponse;
+import distributed.tinyurl.urlservice.dto.UpdateUrlRequest;
 import distributed.tinyurl.urlservice.dto.UrlSummaryResponse;
 import distributed.tinyurl.urlservice.dto.UrlStatsResponse;
 import distributed.tinyurl.urlservice.cache.CachedRedirect;
@@ -123,6 +124,20 @@ public class UrlShortenerService {
 
         urlRepository.delete(url);
         urlRedirectCache.delete(shortCode);
+    }
+
+    public UrlSummaryResponse update(String shortCode, Long userId, UpdateUrlRequest request) {
+        Url url = findByShortCodeAndUserIdOrThrow(shortCode, userId);
+
+        if (request.originalUrl() != null) {
+            url.setOriginalUrl(request.originalUrl());
+        }
+        url.setExpiresAt(request.expiresAt());
+
+        Url saved = urlRepository.save(url);
+        urlRedirectCache.delete(shortCode);
+
+        return toSummaryResponse(saved);
     }
 
     private UrlSummaryResponse toSummaryResponse(Url url) {
