@@ -68,7 +68,7 @@ class UrlShortenerServiceTest {
         });
 
         CreateUrlRequest request = new CreateUrlRequest("https://www.anthropic.com", null);
-        CreateUrlResponse response = service.shorten(request);
+        CreateUrlResponse response = service.shorten(request, 1L);
 
         assertThat(response.shortCode()).isEqualTo("abc123X");
         assertThat(response.shortUrl()).isEqualTo(BASE_URL + "/abc123X");
@@ -181,13 +181,14 @@ class UrlShortenerServiceTest {
         Url url = Url.builder()
                 .shortCode("abc123X")
                 .originalUrl("https://www.anthropic.com")
+                .userId(1L)
                 .clickCount(42L)
                 .createdAt(FIXED_NOW)
                 .build();
 
-        when(urlRepository.findByShortCode("abc123X")).thenReturn(Optional.of(url));
+        when(urlRepository.findByShortCodeAndUserId("abc123X", 1L)).thenReturn(Optional.of(url));
 
-        UrlStatsResponse stats = service.getStats("abc123X");
+        UrlStatsResponse stats = service.getStats("abc123X", 1L);
 
         assertThat(stats.clickCount()).isEqualTo(42L);
         assertThat(stats.shortCode()).isEqualTo("abc123X");
@@ -195,9 +196,9 @@ class UrlShortenerServiceTest {
 
     @Test
     void getStatsThrowsWhenShortCodeDoesNotExist() {
-        when(urlRepository.findByShortCode("noexiste")).thenReturn(Optional.empty());
+        when(urlRepository.findByShortCodeAndUserId("noexiste", 1L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.getStats("noexiste"))
+        assertThatThrownBy(() -> service.getStats("noexiste", 1L))
                 .isInstanceOf(UrlNotFoundException.class);
     }
 }

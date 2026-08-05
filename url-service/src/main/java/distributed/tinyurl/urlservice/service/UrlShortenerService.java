@@ -2,6 +2,7 @@ package distributed.tinyurl.urlservice.service;
 
 import distributed.tinyurl.urlservice.dto.CreateUrlRequest;
 import distributed.tinyurl.urlservice.dto.CreateUrlResponse;
+import distributed.tinyurl.urlservice.dto.UrlSummaryResponse;
 import distributed.tinyurl.urlservice.dto.UrlStatsResponse;
 import distributed.tinyurl.urlservice.cache.CachedRedirect;
 import distributed.tinyurl.urlservice.cache.UrlRedirectCache;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 
 @Service
 public class UrlShortenerService {
@@ -42,10 +44,6 @@ public class UrlShortenerService {
         this.clickEventPublisher = clickEventPublisher;
         this.clock = clock;
         this.baseUrl = baseUrl;
-    }
-
-    public CreateUrlResponse shorten(CreateUrlRequest request) {
-        return shorten(request, null);
     }
 
     public CreateUrlResponse shorten(CreateUrlRequest request, Long userId) {
@@ -102,8 +100,14 @@ public class UrlShortenerService {
         clickEventPublisher.publish(new ClickRecordedEvent(shortCode, Instant.now(clock)));
     }
 
-    public UrlStatsResponse getStats(String shortCode) {
-        Url url = findByShortCodeOrThrow(shortCode);
+    public List<UrlSummaryResponse> listByOwner(Long userId) {
+        return urlRepository.findAllByUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(this::toSummaryResponse)
+                .toList();
+    }
+
+    public UrlStatsResponse getStats(String shortCode, Long userId) {
+        Url url = findByShortCodeAndUserIdOrThrow(shortCode, userId);
 
         return new UrlStatsResponse(
                 url.getShortCode(),
@@ -114,8 +118,24 @@ public class UrlShortenerService {
         );
     }
 
+    private UrlSummaryResponse toSummaryResponse(Url url) {
+        return new UrlSummaryResponse(
+                url.getShortCode(),
+                baseUrl + "/" + url.getShortCode(),
+                url.getOriginalUrl(),
+                url.getCreatedAt(),
+                url.getExpiresAt(),
+                url.getClickCount()
+        );
+    }
+
     private Url findByShortCodeOrThrow(String shortCode) {
         return urlRepository.findByShortCode(shortCode)
+                .orElseThrow(() -> new UrlNotFoundException(shortCode));
+    }
+
+    private Url findByShortCodeAndUserIdOrThrow(String shortCode, Long userId) {
+        return urlRepository.findByShortCodeAndUserId(shortCode, userId)
                 .orElseThrow(() -> new UrlNotFoundException(shortCode));
     }
 }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import distributed.tinyurl.urlservice.TestcontainersConfiguration;
 import distributed.tinyurl.urlservice.dto.CreateUrlRequest;
 import distributed.tinyurl.urlservice.repository.UrlRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -40,6 +41,11 @@ class UrlEndToEndTest {
 
     private final ObjectMapper jsonMapper = JsonMapper.builder().findAndAddModules().build();
 
+    @BeforeEach
+    void cleanDatabase() {
+        urlRepository.deleteAll();
+    }
+
     @Test
     void createResolveAndFetchStatsFullFlow() throws Exception {
         CreateUrlRequest request = new CreateUrlRequest("https://www.anthropic.com", null);
@@ -62,7 +68,8 @@ class UrlEndToEndTest {
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", "https://www.anthropic.com"));
 
-        mockMvc.perform(get("/api/v1/urls/{code}", shortCode))
+        mockMvc.perform(get("/api/v1/urls/{code}", shortCode)
+                        .header("Authorization", JwtTestTokens.bearerToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.shortCode").value(shortCode))
                 .andExpect(jsonPath("$.clickCount").value(0));
@@ -133,6 +140,13 @@ class UrlEndToEndTest {
     }
 
     @Test
+    void getStatsReturns401WhenTokenIsMissing() throws Exception {
+        mockMvc.perform(get("/api/v1/urls/{code}", "abc123X"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
     void createShortUrlReturns401WhenTokenIsInvalid() throws Exception {
         CreateUrlRequest request = new CreateUrlRequest("https://www.anthropic.com", null);
 
@@ -147,7 +161,51 @@ class UrlEndToEndTest {
 
     @Test
     void getStatsReturns404WhenShortCodeDoesNotExist() throws Exception {
-        mockMvc.perform(get("/api/v1/urls/{code}", "noexiste123"))
+        mockMvc.perform(get("/api/v1/urls/{code}", "noexiste123")
+                        .header("Authorization", JwtTestTokens.bearerToken()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void listMyUrlsReturnsOnlyAuthenticatedUsersUrls() throws Exception {
+        CreateUrlRequest request = new CreateUrlRequest("https://www.anthropic.com", null);
+
+        mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken(1L, "ada@example.com"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken(2L, "grace@example.com"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken(1L, "ada@example.com")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].originalUrl").value("https://www.anthropic.com"));
+    }
+
+    @Test
+    void getStatsReturns404WhenUrlBelongsToAnotherUser() throws Exception {
+        CreateUrlRequest request = new CreateUrlRequest("https://www.anthropic.com", null);
+
+        String responseJson = mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken(1L, "ada@example.com"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String shortCode = jsonMapper.readTree(responseJson).get("shortCode").asText();
+
+        mockMvc.perform(get("/api/v1/urls/{code}", shortCode)
+                        .header("Authorization", JwtTestTokens.bearerToken(2L, "grace@example.com")))
                 .andExpect(status().isNotFound());
     }
 }

@@ -21,11 +21,15 @@ final class JwtTestTokens {
     }
 
     static String bearerToken() {
+        return bearerToken(1L, "ada@example.com");
+    }
+
+    static String bearerToken(Long userId, String email) {
         Instant now = Instant.now();
 
         return "Bearer " + Jwts.builder()
-                .subject("ada@example.com")
-                .claim("userId", 1L)
+                .subject(email)
+                .claim("userId", userId)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(3600)))
                 .signWith(privateKey(), Jwts.SIG.RS256)

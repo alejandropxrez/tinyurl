@@ -54,6 +54,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         Long userId = claims.get("userId", Long.class);
+        if (userId == null || claims.getSubject() == null) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            objectMapper.writeValue(response.getWriter(), ApiError.of(401, "Unauthorized", "Invalid access token"));
+            return;
+        }
+
         JwtPrincipal principal = new JwtPrincipal(userId, claims.getSubject());
 
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(

@@ -2,6 +2,7 @@ package distributed.tinyurl.urlservice.controller;
 
 import distributed.tinyurl.urlservice.dto.CreateUrlRequest;
 import distributed.tinyurl.urlservice.dto.CreateUrlResponse;
+import distributed.tinyurl.urlservice.dto.UrlSummaryResponse;
 import distributed.tinyurl.urlservice.dto.UrlStatsResponse;
 import distributed.tinyurl.urlservice.exception.RateLimitExceededException;
 import distributed.tinyurl.urlservice.ratelimit.CreateUrlRateLimiter;
@@ -13,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("${app.api.base-path}/urls")
@@ -43,8 +46,18 @@ public class UrlManagementController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @GetMapping
+    public ResponseEntity<List<UrlSummaryResponse>> listMyUrls(
+            @AuthenticationPrincipal JwtPrincipal principal
+    ) {
+        return ResponseEntity.ok(urlShortenerService.listByOwner(principal.userId()));
+    }
+
     @GetMapping("/{code}")
-    public ResponseEntity<UrlStatsResponse> getStats(@PathVariable String code) {
-        return ResponseEntity.ok(urlShortenerService.getStats(code));
+    public ResponseEntity<UrlStatsResponse> getStats(
+            @PathVariable String code,
+            @AuthenticationPrincipal JwtPrincipal principal
+    ) {
+        return ResponseEntity.ok(urlShortenerService.getStats(code, principal.userId()));
     }
 }
