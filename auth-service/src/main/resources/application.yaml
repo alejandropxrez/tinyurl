@@ -16,10 +16,15 @@ server:
   port: 8082
 
 management:
+  server:
+    port: ${MANAGEMENT_SERVER_PORT:9002}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 app:
   api:

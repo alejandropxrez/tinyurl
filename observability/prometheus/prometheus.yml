@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: url-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - url-service:9001
+
+  - job_name: auth-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - auth-service:9002
+
+  - job_name: analytics-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - analytics-service:9003

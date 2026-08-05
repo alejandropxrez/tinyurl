@@ -60,3 +60,31 @@ container.
 In Kubernetes, `url-service` runs as a StatefulSet with hostname-based node id
 derivation enabled. Each Pod derives its node id from the stable Pod ordinal:
 `url-service-0` uses node id `1`, `url-service-1` uses node id `2`, and so on.
+
+## Observability
+
+Each Spring Boot service exposes Prometheus metrics through Actuator on an
+internal management port:
+
+```text
+url-service:9001/actuator/prometheus
+auth-service:9002/actuator/prometheus
+analytics-service:9003/actuator/prometheus
+```
+
+Docker Compose also runs Prometheus and Grafana:
+
+```text
+Prometheus: http://localhost:9090
+Grafana:    http://localhost:3000
+```
+
+Prometheus scrapes the services through Docker DNS names. The management ports
+are not published to the host by Docker Compose, so normal users only reach the
+application ports:
+
+```text
+url-service:9001/actuator/prometheus
+auth-service:9002/actuator/prometheus
+analytics-service:9003/actuator/prometheus
+```

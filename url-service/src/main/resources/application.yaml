@@ -25,10 +25,15 @@ server:
   port: 8081
 
 management:
+  server:
+    port: ${MANAGEMENT_SERVER_PORT:9001}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
 app:
   base-url: ${APP_BASE_URL:http://localhost:8081}
   api:
