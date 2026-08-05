@@ -2,6 +2,7 @@ package distributed.tinyurl.authservice.controller;
 
 import distributed.tinyurl.authservice.dto.LoginRequest;
 import distributed.tinyurl.authservice.dto.LoginResponse;
+import distributed.tinyurl.authservice.dto.RefreshTokenRequest;
 import distributed.tinyurl.authservice.dto.RegisterRequest;
 import distributed.tinyurl.authservice.dto.RegisterResponse;
 import distributed.tinyurl.authservice.service.AuthService;
@@ -32,5 +33,16 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<LoginResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(authService.refresh(request));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshTokenRequest request) {
+        authService.logout(request);
+        return ResponseEntity.noContent().build();
     }
 }

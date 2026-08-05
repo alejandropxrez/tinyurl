@@ -1,4 +1,3 @@
 package distributed.tinyurl.urlservice.security;
 
-public class InvalidJwtException extends RuntimeException {
-}
+public class InvalidJwtException extends RuntimeException { }

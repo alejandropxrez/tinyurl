@@ -2,7 +2,9 @@ package distributed.tinyurl.authservice;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import distributed.tinyurl.authservice.dto.LoginRequest;
+import distributed.tinyurl.authservice.dto.RefreshTokenRequest;
 import distributed.tinyurl.authservice.dto.RegisterRequest;
+import distributed.tinyurl.authservice.repository.RefreshTokenRepository;
 import distributed.tinyurl.authservice.repository.UserRepository;
 import distributed.tinyurl.authservice.service.JwtService;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +45,9 @@ class AuthRegistrationEndToEndTest {
     private UserRepository userRepository;
 
     @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -50,6 +55,7 @@ class AuthRegistrationEndToEndTest {
 
     @BeforeEach
     void setUp() {
+        refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
     }
 
@@ -115,14 +121,19 @@ class AuthRegistrationEndToEndTest {
                         .content(objectMapper.writeValueAsString(loginRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isString())
+                .andExpect(jsonPath("$.refreshToken").isString())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.expiresIn").value(3600))
+                .andExpect(jsonPath("$.refreshExpiresIn").value(2592000))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
 
         String accessToken = objectMapper.readTree(response).get("accessToken").asText();
+        String refreshToken = objectMapper.readTree(response).get("refreshToken").asText();
         assertThat(jwtService.extractSubject(accessToken)).isEqualTo("ada@example.com");
+        assertThat(refreshTokenRepository.findAll()).hasSize(1);
+        assertThat(refreshTokenRepository.findAll().getFirst().getTokenHash()).isNotEqualTo(refreshToken);
     }
 
     @Test
@@ -141,5 +152,97 @@ class AuthRegistrationEndToEndTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.error").value("Unauthorized"));
+    }
+
+    @Test
+    void refreshReturnsNewTokenPairAndRevokesOldRefreshToken() throws Exception {
+        String refreshToken = registerAndLoginReturningRefreshToken();
+
+        RefreshTokenRequest refreshRequest = new RefreshTokenRequest(refreshToken);
+        String refreshResponse = mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(refreshRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isString())
+                .andExpect(jsonPath("$.refreshToken").isString())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String newAccessToken = objectMapper.readTree(refreshResponse).get("accessToken").asText();
+        String newRefreshToken = objectMapper.readTree(refreshResponse).get("refreshToken").asText();
+
+        assertThat(jwtService.extractSubject(newAccessToken)).isEqualTo("ada@example.com");
+        assertThat(newRefreshToken).isNotEqualTo(refreshToken);
+        assertThat(refreshTokenRepository.findAll())
+                .hasSize(2)
+                .anySatisfy(token -> assertThat(token.getRevokedAt()).isNotNull())
+                .anySatisfy(token -> assertThat(token.getRevokedAt()).isNull());
+    }
+
+    @Test
+    void refreshReturns401WhenRefreshTokenWasAlreadyUsed() throws Exception {
+        String refreshToken = registerAndLoginReturningRefreshToken();
+        RefreshTokenRequest refreshRequest = new RefreshTokenRequest(refreshToken);
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(refreshRequest)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(refreshRequest)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Invalid refresh token"));
+    }
+
+    @Test
+    void logoutRevokesRefreshToken() throws Exception {
+        String refreshToken = registerAndLoginReturningRefreshToken();
+        RefreshTokenRequest request = new RefreshTokenRequest(refreshToken);
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNoContent());
+
+        assertThat(refreshTokenRepository.findAll().getFirst().getRevokedAt()).isNotNull();
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void logoutReturns401WhenRefreshTokenIsInvalid() throws Exception {
+        RefreshTokenRequest request = new RefreshTokenRequest("not-a-real-refresh-token");
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Invalid refresh token"));
+    }
+
+    private String registerAndLoginReturningRefreshToken() throws Exception {
+        RegisterRequest registerRequest = new RegisterRequest("Ada@Example.com", "strong-password");
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerRequest)))
+                .andExpect(status().isCreated());
+
+        LoginRequest loginRequest = new LoginRequest("ada@example.com", "strong-password");
+        String response = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        return objectMapper.readTree(response).get("refreshToken").asText();
     }
 }
