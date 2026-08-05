@@ -13,6 +13,7 @@ import distributed.tinyurl.authservice.model.RefreshToken;
 import distributed.tinyurl.authservice.model.User;
 import distributed.tinyurl.authservice.repository.RefreshTokenRepository;
 import distributed.tinyurl.authservice.repository.UserRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final RefreshTokenProperties refreshTokenProperties;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthService(
@@ -46,7 +48,8 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             RefreshTokenProperties refreshTokenProperties,
-            Clock clock
+            Clock clock,
+            MeterRegistry meterRegistry
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -54,6 +57,7 @@ public class AuthService {
         this.jwtService = jwtService;
         this.refreshTokenProperties = refreshTokenProperties;
         this.clock = clock;
+        this.meterRegistry = meterRegistry;
     }
 
     public RegisterResponse register(RegisterRequest request) {
@@ -69,6 +73,7 @@ public class AuthService {
                 .build();
 
         User saved = userRepository.save(user);
+        meterRegistry.counter("tinyurl_auth_registrations_total", "outcome", "success").increment();
 
         return new RegisterResponse(saved.getId(), saved.getEmail(), saved.getCreatedAt());
     }
@@ -76,25 +81,32 @@ public class AuthService {
     public LoginResponse login(LoginRequest request) {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         User user = userRepository.findByEmail(normalizedEmail)
-                .orElseThrow(InvalidCredentialsException::new);
+                .orElseThrow(() -> {
+                    meterRegistry.counter("tinyurl_auth_logins_total", "outcome", "failure").increment();
+                    return new InvalidCredentialsException();
+                });
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            meterRegistry.counter("tinyurl_auth_logins_total", "outcome", "failure").increment();
             throw new InvalidCredentialsException();
         }
 
+        meterRegistry.counter("tinyurl_auth_logins_total", "outcome", "success").increment();
         return createTokenPair(user);
     }
 
     public LoginResponse refresh(RefreshTokenRequest request) {
-        RefreshToken refreshToken = findValidRefreshToken(request.refreshToken());
+        RefreshToken refreshToken = findValidRefreshToken(request.refreshToken(), "refresh");
         refreshToken.setRevokedAt(Instant.now(clock));
 
+        meterRegistry.counter("tinyurl_auth_refreshes_total", "outcome", "success").increment();
         return createTokenPair(refreshToken.getUser());
     }
 
     public void logout(RefreshTokenRequest request) {
-        RefreshToken refreshToken = findValidRefreshToken(request.refreshToken());
+        RefreshToken refreshToken = findValidRefreshToken(request.refreshToken(), "logout");
         refreshToken.setRevokedAt(Instant.now(clock));
+        meterRegistry.counter("tinyurl_auth_logouts_total", "outcome", "success").increment();
     }
 
     private LoginResponse createTokenPair(User user) {
@@ -116,15 +128,27 @@ public class AuthService {
         );
     }
 
-    private RefreshToken findValidRefreshToken(String rawRefreshToken) {
+    private RefreshToken findValidRefreshToken(String rawRefreshToken, String operation) {
         RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(hashRefreshToken(rawRefreshToken))
-                .orElseThrow(InvalidRefreshTokenException::new);
+                .orElseThrow(() -> {
+                    recordInvalidRefreshToken(operation);
+                    return new InvalidRefreshTokenException();
+                });
 
         if (refreshToken.getRevokedAt() != null || !refreshToken.getExpiresAt().isAfter(Instant.now(clock))) {
+            recordInvalidRefreshToken(operation);
             throw new InvalidRefreshTokenException();
         }
 
         return refreshToken;
+    }
+
+    private void recordInvalidRefreshToken(String operation) {
+        if ("refresh".equals(operation)) {
+            meterRegistry.counter("tinyurl_auth_refreshes_total", "outcome", "failure").increment();
+        } else if ("logout".equals(operation)) {
+            meterRegistry.counter("tinyurl_auth_logouts_total", "outcome", "failure").increment();
+        }
     }
 
     private String generateRefreshToken() {

@@ -2,6 +2,8 @@ package distributed.tinyurl.analyticsservice.events;
 
 import distributed.tinyurl.analyticsservice.model.ClickEvent;
 import distributed.tinyurl.analyticsservice.repository.ClickEventRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -54,6 +56,11 @@ class ClickRecordedEventConsumerTest {
         @Bean
         ClickEventRepository clickEventRepository() {
             return mock(ClickEventRepository.class);
+        }
+
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
         }
     }
 }

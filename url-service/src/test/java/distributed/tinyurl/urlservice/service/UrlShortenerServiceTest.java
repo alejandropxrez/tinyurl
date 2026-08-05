@@ -14,6 +14,7 @@ import distributed.tinyurl.urlservice.exception.UrlNotFoundException;
 import distributed.tinyurl.urlservice.idgen.ShortCodeGenerator;
 import distributed.tinyurl.urlservice.model.Url;
 import distributed.tinyurl.urlservice.repository.UrlRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,7 +57,15 @@ class UrlShortenerServiceTest {
     @BeforeEach
     void setUp() {
         Clock fixedClock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
-        service = new UrlShortenerService(urlRepository, shortCodeGenerator, urlRedirectCache, clickEventPublisher, fixedClock, BASE_URL);
+        service = new UrlShortenerService(
+                urlRepository,
+                shortCodeGenerator,
+                urlRedirectCache,
+                clickEventPublisher,
+                fixedClock,
+                BASE_URL,
+                new SimpleMeterRegistry()
+        );
     }
 
     @Test
