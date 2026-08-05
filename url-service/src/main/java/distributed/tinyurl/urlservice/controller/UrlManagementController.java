@@ -60,4 +60,13 @@ public class UrlManagementController {
     ) {
         return ResponseEntity.ok(urlShortenerService.getStats(code, principal.userId()));
     }
+
+    @DeleteMapping("/{code}")
+    public ResponseEntity<Void> delete(
+            @PathVariable String code,
+            @AuthenticationPrincipal JwtPrincipal principal
+    ) {
+        urlShortenerService.delete(code, principal.userId());
+        return ResponseEntity.noContent().build();
+    }
 }

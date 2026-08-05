@@ -57,6 +57,15 @@ public class RedisUrlRedirectCache implements UrlRedirectCache {
         }
     }
 
+    @Override
+    public void delete(String shortCode) {
+        try {
+            redisTemplate.delete(cacheKey(shortCode));
+        } catch (DataAccessException ignored) {
+            // Postgres remains the source of truth if Redis is temporarily unavailable.
+        }
+    }
+
     private String cacheKey(String shortCode) {
         return KEY_PREFIX + shortCode;
     }

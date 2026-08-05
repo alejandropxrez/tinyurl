@@ -208,4 +208,60 @@ class UrlEndToEndTest {
                         .header("Authorization", JwtTestTokens.bearerToken(2L, "grace@example.com")))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void deleteRemovesOwnedUrlAndEvictsCachedRedirect() throws Exception {
+        CreateUrlRequest request = new CreateUrlRequest("https://www.anthropic.com", null);
+
+        String responseJson = mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken(1L, "ada@example.com"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String shortCode = jsonMapper.readTree(responseJson).get("shortCode").asText();
+
+        mockMvc.perform(get("/{code}", shortCode))
+                .andExpect(status().isFound());
+
+        mockMvc.perform(delete("/api/v1/urls/{code}", shortCode)
+                        .header("Authorization", JwtTestTokens.bearerToken(1L, "ada@example.com")))
+                .andExpect(status().isNoContent());
+
+        assertThat(urlRepository.findByShortCode(shortCode)).isEmpty();
+
+        mockMvc.perform(get("/{code}", shortCode))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deleteReturns404WhenUrlBelongsToAnotherUser() throws Exception {
+        CreateUrlRequest request = new CreateUrlRequest("https://www.anthropic.com", null);
+
+        String responseJson = mockMvc.perform(post("/api/v1/urls")
+                        .header("Authorization", JwtTestTokens.bearerToken(1L, "ada@example.com"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String shortCode = jsonMapper.readTree(responseJson).get("shortCode").asText();
+
+        mockMvc.perform(delete("/api/v1/urls/{code}", shortCode)
+                        .header("Authorization", JwtTestTokens.bearerToken(2L, "grace@example.com")))
+                .andExpect(status().isNotFound());
+
+        assertThat(urlRepository.findByShortCode(shortCode)).isPresent();
+    }
+
+    @Test
+    void deleteReturns401WhenTokenIsMissing() throws Exception {
+        mockMvc.perform(delete("/api/v1/urls/{code}", "abc123X"))
+                .andExpect(status().isUnauthorized());
+    }
 }

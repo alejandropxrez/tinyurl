@@ -201,4 +201,31 @@ class UrlShortenerServiceTest {
         assertThatThrownBy(() -> service.getStats("noexiste", 1L))
                 .isInstanceOf(UrlNotFoundException.class);
     }
+
+    @Test
+    void deleteRemovesOwnedUrlAndEvictsRedirectCache() {
+        Url url = Url.builder()
+                .shortCode("abc123X")
+                .originalUrl("https://www.anthropic.com")
+                .userId(1L)
+                .build();
+
+        when(urlRepository.findByShortCodeAndUserId("abc123X", 1L)).thenReturn(Optional.of(url));
+
+        service.delete("abc123X", 1L);
+
+        verify(urlRepository).delete(url);
+        verify(urlRedirectCache).delete("abc123X");
+    }
+
+    @Test
+    void deleteThrowsWhenUrlDoesNotBelongToUser() {
+        when(urlRepository.findByShortCodeAndUserId("abc123X", 2L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.delete("abc123X", 2L))
+                .isInstanceOf(UrlNotFoundException.class);
+
+        verify(urlRepository, never()).delete(any(Url.class));
+        verify(urlRedirectCache, never()).delete(anyString());
+    }
 }

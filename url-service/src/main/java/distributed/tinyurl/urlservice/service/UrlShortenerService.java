@@ -118,6 +118,13 @@ public class UrlShortenerService {
         );
     }
 
+    public void delete(String shortCode, Long userId) {
+        Url url = findByShortCodeAndUserIdOrThrow(shortCode, userId);
+
+        urlRepository.delete(url);
+        urlRedirectCache.delete(shortCode);
+    }
+
     private UrlSummaryResponse toSummaryResponse(Url url) {
         return new UrlSummaryResponse(
                 url.getShortCode(),

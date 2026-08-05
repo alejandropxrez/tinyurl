@@ -6,4 +6,6 @@ public interface UrlRedirectCache {
     Optional<CachedRedirect> findByShortCode(String shortCode);
 
     void save(String shortCode, CachedRedirect redirect);
+
+    void delete(String shortCode);
 }
