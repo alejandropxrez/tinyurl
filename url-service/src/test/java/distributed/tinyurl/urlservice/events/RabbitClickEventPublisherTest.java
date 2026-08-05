@@ -1,5 +1,7 @@
 package distributed.tinyurl.urlservice.events;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.retry.RetryRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @SpringJUnitConfig(classes = {
@@ -62,6 +65,7 @@ class RabbitClickEventPublisherTest {
                 .convertAndSend(EXCHANGE, ROUTING_KEY, event);
 
         assertThatCode(() -> publisher.publish(event)).doesNotThrowAnyException();
+        verify(rabbitTemplate, times(3)).convertAndSend(EXCHANGE, ROUTING_KEY, event);
     }
 
     @TestConfiguration
@@ -75,6 +79,16 @@ class RabbitClickEventPublisherTest {
         @Bean
         MeterRegistry meterRegistry() {
             return new SimpleMeterRegistry();
+        }
+
+        @Bean
+        CircuitBreakerRegistry circuitBreakerRegistry() {
+            return CircuitBreakerRegistry.ofDefaults();
+        }
+
+        @Bean
+        RetryRegistry retryRegistry() {
+            return RetryRegistry.ofDefaults();
         }
 
     }

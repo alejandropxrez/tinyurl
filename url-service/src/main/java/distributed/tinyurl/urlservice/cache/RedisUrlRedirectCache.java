@@ -3,9 +3,10 @@ package distributed.tinyurl.urlservice.cache;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import distributed.tinyurl.urlservice.observability.MetricTagValue;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +23,7 @@ import static distributed.tinyurl.urlservice.observability.MetricTagValue.ERROR;
 import static distributed.tinyurl.urlservice.observability.MetricTagValue.HIT;
 import static distributed.tinyurl.urlservice.observability.MetricTagValue.MISS;
 import static distributed.tinyurl.urlservice.observability.MetricTagValue.SUCCESS;
+import static distributed.tinyurl.urlservice.resilience.ResilienceInstance.REDIS_REDIRECT_CACHE;
 
 @Component
 public class RedisUrlRedirectCache implements UrlRedirectCache {
@@ -31,23 +33,34 @@ public class RedisUrlRedirectCache implements UrlRedirectCache {
     private final Clock clock;
     private final Duration ttl;
     private final MeterRegistry meterRegistry;
+    private final CircuitBreaker circuitBreaker;
 
     public RedisUrlRedirectCache(
             StringRedisTemplate redisTemplate,
             ObjectMapper objectMapper,
             Clock clock,
             @Value("${app.cache.redirects.ttl}") Duration ttl,
-            MeterRegistry meterRegistry
+            MeterRegistry meterRegistry,
+            CircuitBreakerRegistry circuitBreakerRegistry
     ) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.ttl = ttl;
         this.meterRegistry = meterRegistry;
+        this.circuitBreaker = circuitBreakerRegistry.circuitBreaker(REDIS_REDIRECT_CACHE.key());
     }
 
     @Override
     public Optional<CachedRedirect> findByShortCode(String shortCode) {
+        try {
+            return circuitBreaker.executeSupplier(() -> findByShortCodeInRedis(shortCode));
+        } catch (RuntimeException ex) {
+            return findFallback();
+        }
+    }
+
+    private Optional<CachedRedirect> findByShortCodeInRedis(String shortCode) {
         try {
             String json = redisTemplate.opsForValue().get(cacheKey(shortCode));
             if (json == null) {
@@ -56,7 +69,7 @@ public class RedisUrlRedirectCache implements UrlRedirectCache {
             }
             recordCacheRequest(HIT);
             return Optional.of(objectMapper.readValue(json, CachedRedirect.class));
-        } catch (JsonProcessingException | DataAccessException ex) {
+        } catch (JsonProcessingException ex) {
             recordCacheRequest(ERROR);
             return Optional.empty();
         }
@@ -65,24 +78,47 @@ public class RedisUrlRedirectCache implements UrlRedirectCache {
     @Override
     public void save(String shortCode, CachedRedirect redirect) {
         try {
+            circuitBreaker.executeRunnable(() -> saveInRedis(shortCode, redirect));
+        } catch (RuntimeException ex) {
+            saveFallback();
+        }
+    }
+
+    private void saveInRedis(String shortCode, CachedRedirect redirect) {
+        try {
             String json = objectMapper.writeValueAsString(redirect);
             redisTemplate.opsForValue().set(cacheKey(shortCode), json, effectiveTtl(redirect));
             meterRegistry.counter(REDIRECT_CACHE_WRITES.key(), OUTCOME.key(), SUCCESS.key()).increment();
-        } catch (JsonProcessingException | DataAccessException ignored) {
+        } catch (JsonProcessingException ignored) {
             meterRegistry.counter(REDIRECT_CACHE_WRITES.key(), OUTCOME.key(), ERROR.key()).increment();
-            // Redis is an optimization for redirects, not the source of truth.
         }
     }
 
     @Override
     public void delete(String shortCode) {
         try {
-            redisTemplate.delete(cacheKey(shortCode));
-            meterRegistry.counter(REDIRECT_CACHE_EVICTIONS.key(), OUTCOME.key(), SUCCESS.key()).increment();
-        } catch (DataAccessException ignored) {
-            meterRegistry.counter(REDIRECT_CACHE_EVICTIONS.key(), OUTCOME.key(), ERROR.key()).increment();
-            // Postgres remains the source of truth if Redis is temporarily unavailable.
+            circuitBreaker.executeRunnable(() -> {
+                redisTemplate.delete(cacheKey(shortCode));
+                meterRegistry.counter(REDIRECT_CACHE_EVICTIONS.key(), OUTCOME.key(), SUCCESS.key()).increment();
+            });
+        } catch (RuntimeException ex) {
+            deleteFallback();
         }
+    }
+
+    private Optional<CachedRedirect> findFallback() {
+        recordCacheRequest(ERROR);
+        return Optional.empty();
+    }
+
+    private void saveFallback() {
+        meterRegistry.counter(REDIRECT_CACHE_WRITES.key(), OUTCOME.key(), ERROR.key()).increment();
+        // Redis is an optimization for redirects, not the source of truth.
+    }
+
+    private void deleteFallback() {
+        meterRegistry.counter(REDIRECT_CACHE_EVICTIONS.key(), OUTCOME.key(), ERROR.key()).increment();
+        // Postgres remains the source of truth if Redis is temporarily unavailable.
     }
 
     private void recordCacheRequest(MetricTagValue outcome) {

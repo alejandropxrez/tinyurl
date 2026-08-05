@@ -86,7 +86,21 @@ are not published to the host by Docker Compose, so normal users only reach the
 application ports:
 
 ```text
-url-service:9001/actuator/prometheus
-auth-service:9002/actuator/prometheus
-analytics-service:9003/actuator/prometheus
+url-service:       http://localhost:8081
+auth-service:      http://localhost:8082
+analytics-service: http://localhost:8083
 ```
+
+## Resilience
+
+`url-service` uses Resilience4j around infrastructure calls that should degrade
+gracefully:
+
+- RabbitMQ click-event publishing retries briefly, then falls back so redirects
+  are not blocked by analytics outages.
+- Redis redirect-cache failures fall back to Postgres as the source of truth.
+- Redis rate-limit failures currently fail open and record `error_allowed`, so
+  URL creation remains available while the degraded behavior is visible in
+  metrics.
+- Redis and RabbitMQ client calls have short local timeouts so infrastructure
+  failures do not hold request threads for too long.
