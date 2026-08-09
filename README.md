@@ -104,3 +104,13 @@ gracefully:
   metrics.
 - Redis and RabbitMQ client calls have short local timeouts so infrastructure
   failures do not hold request threads for too long.
+
+Run the local resilience smoke test with Docker Compose already up:
+
+```powershell
+.\scripts\verify-resilience.ps1
+```
+
+The script verifies that redirects survive RabbitMQ outages and that URL
+creation plus redirects survive Redis outages. After it runs, inspect
+Prometheus/Grafana for Resilience4j metrics and custom `error` outcomes.
