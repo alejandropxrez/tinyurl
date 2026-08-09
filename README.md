@@ -81,9 +81,10 @@ Prometheus: http://localhost:9090
 Grafana:    http://localhost:3000
 ```
 
-Prometheus scrapes the services through Docker DNS names. The management ports
-are not published to the host by Docker Compose, so normal users only reach the
-application ports:
+Prometheus scrapes the services through Docker DNS names. Grafana is
+provisioned with the Prometheus datasource and a `TinyURL Overview` dashboard
+when Docker Compose starts. The management ports are not published to the host
+by Docker Compose, so normal users only reach the application ports:
 
 ```text
 url-service:       http://localhost:8081
