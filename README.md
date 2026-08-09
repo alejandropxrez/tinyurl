@@ -124,3 +124,39 @@ GitHub Actions runs on pushes to `master` and on pull requests. The workflow:
   each service Maven wrapper
 - validates `docker-compose.yaml`
 - builds the three service Docker images
+
+## Pending Production Hardening
+
+- Add durable click-event delivery with an outbox pattern or event log so
+  redirects do not lose analytics events when RabbitMQ is unavailable.
+- Add `eventId` to click events and make analytics consumers idempotent to
+  handle retries, redelivery, and duplicate messages.
+- Decide the source of truth for click counts: either remove `urls.click_count`
+  from `url-service` or update it asynchronously from analytics.
+- Replace direct `COUNT(*)` analytics queries with precomputed aggregates by
+  short code and time window.
+- Make Redis rate limiting atomic with Lua or another single-command approach
+  so `INCR` and `EXPIRE` cannot become inconsistent.
+- Handle trusted proxy headers for rate limiting instead of relying only on
+  `request.getRemoteAddr()`.
+- Add protection against Redis cache stampede for popular short codes.
+- Add JWT key rotation support using `kid` headers and a published or managed
+  key set.
+- Add stronger refresh-token concurrency protection so two simultaneous refresh
+  requests cannot both succeed.
+- Populate or intentionally remove `userAgent` and `ipHash` in click analytics,
+  with a documented privacy policy.
+- Add dead-letter queues and retry policies for analytics event consumption.
+- Add load and resilience tests for high redirect throughput, RabbitMQ
+  redelivery, Redis outages, and duplicate click events.
+- Revisit Snowflake node-id assignment if moving away from Kubernetes
+  StatefulSets or scaling beyond 1024 `url-service` nodes.
+
+## Known Tradeoffs
+
+- Redirect availability is prioritized over analytics completeness.
+- URL ownership is stored by `userId` without a cross-service foreign key.
+- Analytics is eventually consistent.
+- Redis is treated as an optimization, while Postgres remains the source of
+  truth for URLs.
+- Current rate limiting fails open when Redis is unavailable.
