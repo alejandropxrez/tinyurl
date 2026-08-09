@@ -114,3 +114,12 @@ Run the local resilience smoke test with Docker Compose already up:
 The script verifies that redirects survive RabbitMQ outages and that URL
 creation plus redirects survive Redis outages. After it runs, inspect
 Prometheus/Grafana for Resilience4j metrics and custom `error` outcomes.
+
+## CI
+
+GitHub Actions runs on pushes to `master` and on pull requests. The workflow:
+
+- tests `auth-service`, `url-service`, and `analytics-service` in parallel with
+  each service Maven wrapper
+- validates `docker-compose.yaml`
+- builds the three service Docker images
