@@ -63,6 +63,17 @@ In Kubernetes, `url-service` runs as a StatefulSet with hostname-based node id
 derivation enabled. Each Pod derives its node id from the stable Pod ordinal:
 `url-service-0` uses node id `1`, `url-service-1` uses node id `2`, and so on.
 
+Two instances can generate IDs at the same time without coordination as long as
+they use different node ids. The final ID is not based only on time; it combines
+`timestamp + nodeId + sequence`. If two Pods generate an ID in the same
+millisecond with the same sequence value, the `nodeId` bits still make the final
+IDs different. The real risk is misconfiguration: if two instances use the same
+node id, they can generate the same ID and therefore the same Base62 short code.
+The database unique index on `short_code` would catch that collision on write,
+but production should also validate or alert on duplicate node ids. If the
+service moved from StatefulSets to Deployments, it would need an explicit
+node-id leasing or assignment mechanism.
+
 ## Observability
 
 Each Spring Boot service exposes Prometheus metrics through Actuator on an
